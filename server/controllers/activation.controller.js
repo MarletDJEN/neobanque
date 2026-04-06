@@ -148,6 +148,7 @@ export async function listActivationRequests(req, res) {
 
 export async function approveActivationRequest(req, res) {
   const { id } = req.params;
+  const { iban, bic } = req.body; // Recevoir l'IBAN et BIC de l'admin
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
@@ -159,14 +160,26 @@ export async function approveActivationRequest(req, res) {
     const request = reqData.rows[0];
 
     if (request.step === 'iban_request') {
-      const iban = generateIban();
-      const bic = 'BNPAFRPPXXX';
-      await cli.query(`UPDATE users SET iban = $1, bic = $2, iban_status = 'assigned' WHERE id = $3`, [iban, bic, request.user_id]);
+      // Validation de l'IBAN fourni par l'admin
+      if (!iban || !iban.trim()) {
+        await cli.query('ROLLBACK');
+        return res.status(400).json({ error: 'IBAN requis' });
+      }
+      
+      // Validation basique du format IBAN français
+      const cleanIban = iban.replace(/\s/g, '').toUpperCase();
+      if (!/^FR\d{25}$/.test(cleanIban)) {
+        await cli.query('ROLLBACK');
+        return res.status(400).json({ error: 'Format IBAN invalide. Format attendu: FRXX XXXX XXXX XXXX XXXX XXXX XXX' });
+      }
+      
+      const finalBic = bic || 'BNPAFRPPXXX';
+      await cli.query(`UPDATE users SET iban = $1, bic = $2, iban_status = 'assigned' WHERE id = $3`, [cleanIban, finalBic, request.user_id]);
       await cli.query(`UPDATE account_activation_requests SET status = 'approved', reviewed_at = now() WHERE id = $1`, [id]);
       await insertNotification(cli, request.user_id, 'IBAN attribué !',
-        `Votre IBAN a été généré : ${iban.slice(0, 8)}… Vous pouvez maintenant effectuer le virement de 500€.`);
+        `Votre IBAN a été attribué : ${cleanIban.slice(0, 8)}… Vous pouvez maintenant effectuer le virement de 500€.`);
       await cli.query('COMMIT');
-      res.json({ ok: true, iban, bic });
+      res.json({ ok: true, iban: cleanIban, bic: finalBic });
     } else if (request.step === 'transfer_proof') {
       await cli.query(`UPDATE users SET status = 'active', account_verified = true WHERE id = $1`, [request.user_id]);
       await cli.query(`UPDATE account_activation_requests SET status = 'approved', reviewed_at = now() WHERE id = $1`, [id]);

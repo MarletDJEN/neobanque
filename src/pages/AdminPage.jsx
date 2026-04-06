@@ -449,20 +449,40 @@ function TabIban({ users, requests, load }) {
 
   const assign = async (userId) => {
     const f = ibanForm[userId] || {};
-    if (!f.iban?.trim() || !f.bic?.trim()) return toast.error('IBAN et BIC requis');
-    await api.post(`/admin/users/${userId}/iban`, { iban: f.iban.trim(), bic: f.bic.trim() });
-    toast.success('IBAN attribué');
-    load();
+    if (!f.iban?.trim()) return toast.error('IBAN requis');
+    
+    // Validation basique du format
+    const cleanIban = f.iban.replace(/\s/g, '').toUpperCase();
+    if (!/^FR\d{25}$/.test(cleanIban)) {
+      return toast.error('Format IBAN invalide. Format: FRXX XXXX XXXX XXXX XXXX XXXX XXX');
+    }
+    
+    try {
+      await api.post(`/admin/users/${userId}/iban`, { 
+        iban: cleanIban, 
+        bic: f.bic?.trim() || 'BNPAFRPPXXX' 
+      });
+      toast.success('IBAN attribué avec succès !');
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erreur lors de l\'attribution');
+    }
   };
 
   const getUserInfo = (userId) => {
     return users.find(u => u.id === userId);
   };
 
+  // Formater l'IBAN automatiquement
+  const formatIban = (value) => {
+    const clean = value.replace(/\s/g, '').toUpperCase();
+    return clean.replace(/(.{4})(.{4})(.{4})(.{4})(.{4})(.{3})/, '$1 $2 $3 $4 $5 $6');
+  };
+
   return (
     <div className="space-y-4">
       <h1 className="text-[18px] font-semibold">Attribution IBAN</h1>
-      {pending.length === 0 && <p className="text-slate-500 text-[13px]">Aucune demande.</p>}
+      {pending.length === 0 && <p className="text-slate-500 text-[13px]">Aucune demande d'IBAN en attente.</p>}
       {pending.map((r) => {
         const userInfo = getUserInfo(r.user_id || r.userId);
         return (
@@ -478,7 +498,7 @@ function TabIban({ users, requests, load }) {
                   {userInfo?.accountStatus || 'pending'}
                 </Chip>
                 <Chip color="blue">
-                  {userInfo?.kycStatus || 'unknown'}
+                  KYC: {userInfo?.kycStatus === 'approved' ? '✅' : '⏳'}
                 </Chip>
                 {userInfo?.phone && (
                   <span className="text-[10px] text-slate-400">{userInfo.phone}</span>
@@ -493,16 +513,49 @@ function TabIban({ users, requests, load }) {
           </div>
           
           {/* Formulaire IBAN/BIC */}
-          <div className="space-y-2">
-            <input placeholder="IBAN" className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
-              value={ibanForm[r.user_id || r.userId]?.iban || ''}
-              onChange={(e) => setIbanForm((x) => ({ ...x, [r.user_id || r.userId]: { ...x[r.user_id || r.userId], iban: e.target.value } }))} />
-            <input placeholder="BIC" className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
-              value={ibanForm[r.user_id || r.userId]?.bic || ''}
-              onChange={(e) => setIbanForm((x) => ({ ...x, [r.user_id || r.userId]: { ...x[r.user_id || r.userId], bic: e.target.value } }))} />
+          <div className="space-y-3 border-t pt-3">
+            <p className="text-[12px] font-medium text-slate-700">Attribuer un IBAN manuellement</p>
+            <div className="space-y-2">
+              <div>
+                <label className="text-[10px] text-slate-500">IBAN (27 caractères)</label>
+                <input 
+                  placeholder="FRXX XXXX XXXX XXXX XXXX XXXX XXX" 
+                  className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
+                  value={ibanForm[r.user_id || r.userId]?.iban || ''}
+                  onChange={(e) => setIbanForm((x) => ({ 
+                    ...x, 
+                    [r.user_id || r.userId]: { 
+                      ...x[r.user_id || r.userId], 
+                      iban: formatIban(e.target.value) 
+                    } 
+                  }))}
+                  maxLength={27}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500">BIC (optionnel)</label>
+                <input 
+                  placeholder="BNPAFRPPXXX" 
+                  className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
+                  value={ibanForm[r.user_id || r.userId]?.bic || ''}
+                  onChange={(e) => setIbanForm((x) => ({ 
+                    ...x, 
+                    [r.user_id || r.userId]: { 
+                      ...x[r.user_id || r.userId], 
+                      bic: e.target.value.toUpperCase() 
+                    } 
+                  }))}
+                  maxLength={11}
+                />
+              </div>
+            </div>
           </div>
           
-          <button type="button" onClick={() => assign(r.user_id || r.userId)} className="w-full py-2.5 bg-teal-700 text-white rounded-xl text-[11px] sm:text-[12px] font-semibold">
+          <button 
+            type="button" 
+            onClick={() => assign(r.user_id || r.userId)} 
+            className="w-full py-2.5 bg-teal-700 text-white rounded-xl text-[11px] sm:text-[12px] font-semibold"
+          >
             Attribuer l'IBAN
           </button>
         </div>

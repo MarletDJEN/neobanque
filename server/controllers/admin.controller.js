@@ -225,33 +225,62 @@ export async function setUserStatus(req, res) {
 export async function assignIban(req, res) {
   const { id } = req.params;
   const { iban, bic } = req.body;
-  if (!iban?.trim() || !bic?.trim()) {
-    return res.status(400).json({ error: 'IBAN et BIC requis' });
+  
+  // Validation des données
+  if (!iban?.trim()) {
+    return res.status(400).json({ error: 'IBAN requis' });
   }
+  
+  // Validation basique du format IBAN français
+  const cleanIban = iban.replace(/\s/g, '').toUpperCase();
+  if (!/^FR\d{25}$/.test(cleanIban)) {
+    return res.status(400).json({ error: 'Format IBAN invalide. Format attendu: FRXX XXXX XXXX XXXX XXXX XXXX XXX' });
+  }
+  
+  const finalBic = bic?.trim() || 'BNPAFRPPXXX';
+  
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
+    
+    // Vérifier si l'utilisateur existe
+    const userCheck = await cli.query(`SELECT id FROM users WHERE id = $1`, [id]);
+    if (userCheck.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Utilisateur introuvable' });
+    }
+    
+    // Attribuer l'IBAN et BIC
     await cli.query(
       `UPDATE users SET iban = $1, bic = $2, iban_status = 'assigned' WHERE id = $3`,
-      [iban.trim(), bic.trim(), id]
+      [cleanIban, finalBic, id]
     );
+    
+    // Approuver la demande d'IBAN
     await cli.query(
-      `UPDATE iban_requests SET status = 'approved' WHERE user_id = $1 AND status = 'pending'`,
+      `UPDATE account_activation_requests SET status = 'approved', reviewed_at = now() WHERE user_id = $1 AND step = 'iban_request' AND status = 'pending'`,
       [id]
     );
-    await cli.query(
-      `UPDATE account_activation_requests SET status = 'approved' WHERE user_id = $1 AND step = 'iban_request' AND status = 'pending'`,
-      [id]
-    );
+    
+    // Notifier l'utilisateur
     await insertNotification(
       cli,
       id,
       'IBAN attribué',
-      `Votre IBAN ${iban.trim().slice(0, 8)}… est actif. Consultez Mon compte.`
+      `Votre IBAN ${cleanIban.slice(0, 8)}… est actif. Vous pouvez maintenant effectuer le virement de 500€.`
     );
+    
     await cli.query('COMMIT');
+    
+    // Récupérer les infos mises à jour
     const u = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    res.json({ user: mapUserAdminRow(u.rows[0]), account: toAccount(u.rows[0]) });
+    res.json({ 
+      ok: true, 
+      iban: cleanIban, 
+      bic: finalBic,
+      user: mapUserAdminRow(u.rows[0]), 
+      account: toAccount(u.rows[0]) 
+    });
   } catch (e) {
     await cli.query('ROLLBACK');
     console.error(e);
