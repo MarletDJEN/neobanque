@@ -249,28 +249,20 @@ export async function assignIban(req, res) {
     return res.status(400).json({ error: 'IBAN requis' });
   }
   
-  // Validation basique du format IBAN (accepte différents pays)
+  // Validation basique de l'IBAN (format flexible)
   const cleanIban = iban.replace(/\s/g, '').toUpperCase();
   
-  // Formats IBAN par pays (longueurs variables)
-  const ibanFormats = {
-    'FR': /^FR\d{25}$/,      // France: 27 caractères
-    'DE': /^DE\d{20}$/,      // Allemagne: 22 caractères
-    'BE': /^BE\d{14}$/,      // Belgique: 16 caractères
-    'ES': /^ES\d{22}$/,      // Espagne: 24 caractères
-    'IT': /^IT\d{27}$/,      // Italie: 29 caractères
-    'PT': /^PT\d{23}$/,      // Portugal: 25 caractères
-    'NL': /^NL\d{18}[A-Z]{2}$/, // Pays-Bas: 20 caractères
-    'CH': /^CH\d{17}$/,      // Suisse: 19 caractères
-    'GB': /^GB\d{22}[A-Z]{4}$/, // Royaume-Uni: 26 caractères
-  };
-  
-  const countryCode = cleanIban.substring(0, 2);
-  const isValidFormat = ibanFormats[countryCode] && ibanFormats[countryCode].test(cleanIban);
-  
-  if (!isValidFormat) {
+  // Validation minimale : au moins 2 lettres (code pays) + 2 chiffres
+  if (!/^[A-Z]{2}\d{2,}/.test(cleanIban)) {
     return res.status(400).json({ 
-      error: `Format IBAN invalide pour ${countryCode}. Formats supportés: FR(27), DE(22), BE(16), ES(24), IT(29), PT(25), NL(20), CH(19), GB(26)` 
+      error: 'Format IBAN invalide. Format attendu: 2 lettres (pays) + chiffres. Exemple: FR7630006000011234567890189' 
+    });
+  }
+  
+  // Longueur minimale et maximale raisonnables
+  if (cleanIban.length < 8 || cleanIban.length > 34) {
+    return res.status(400).json({ 
+      error: 'IBAN trop court ou trop long. Longueur acceptée: 8-34 caractères' 
     });
   }
   

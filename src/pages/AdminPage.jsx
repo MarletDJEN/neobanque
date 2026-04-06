@@ -459,27 +459,17 @@ function TabIban({ users, requests, load }) {
     const f = ibanForm[userId] || {};
     if (!f.iban?.trim()) return toast.error('IBAN requis');
     
-    // Validation basique du format IBAN (accepte différents pays)
+    // Validation basique de l'IBAN (format flexible)
     const cleanIban = f.iban.replace(/\s/g, '').toUpperCase();
     
-    // Formats IBAN par pays (longueurs variables)
-    const ibanFormats = {
-      'FR': /^FR\d{25}$/,      // France: 27 caractères
-      'DE': /^DE\d{20}$/,      // Allemagne: 22 caractères
-      'BE': /^BE\d{14}$/,      // Belgique: 16 caractères
-      'ES': /^ES\d{22}$/,      // Espagne: 24 caractères
-      'IT': /^IT\d{27}$/,      // Italie: 29 caractères
-      'PT': /^PT\d{23}$/,      // Portugal: 25 caractères
-      'NL': /^NL\d{18}[A-Z]{2}$/, // Pays-Bas: 20 caractères
-      'CH': /^CH\d{17}$/,      // Suisse: 19 caractères
-      'GB': /^GB\d{22}[A-Z]{4}$/, // Royaume-Uni: 26 caractères
-    };
+    // Validation minimale : au moins 2 lettres (code pays) + 2 chiffres
+    if (!/^[A-Z]{2}\d{2,}/.test(cleanIban)) {
+      return toast.error('Format IBAN invalide. Exemple: FR7630006000011234567890189');
+    }
     
-    const countryCode = cleanIban.substring(0, 2);
-    const isValidFormat = ibanFormats[countryCode] && ibanFormats[countryCode].test(cleanIban);
-    
-    if (!isValidFormat) {
-      return toast.error(`Format IBAN invalide pour ${countryCode}. Vérifiez le nombre de caractères.`);
+    // Longueur minimale et maximale raisonnables
+    if (cleanIban.length < 8 || cleanIban.length > 34) {
+      return toast.error('IBAN trop court ou trop long (8-34 caractères)');
     }
     
     try {
@@ -495,7 +485,15 @@ function TabIban({ users, requests, load }) {
   };
 
   const getUserInfo = (userId) => {
-    return users.find(u => u.id === userId);
+    if (!userId) {
+      console.warn('getUserInfo appelé avec userId null/undefined');
+      return null;
+    }
+    const userInfo = users.find(u => u.id === userId);
+    if (!userInfo) {
+      console.warn('Aucun utilisateur trouvé pour userId:', userId, 'utilisateurs disponibles:', users.map(u => ({ id: u.id, email: u.email })));
+    }
+    return userInfo;
   };
 
   // Formater l'IBAN automatiquement
@@ -530,6 +528,10 @@ function TabIban({ users, requests, load }) {
           
           {ibanRequests.map((r) => {
             const userInfo = getUserInfo(r.user_id || r.userId);
+            if (!userInfo) {
+              console.warn('UserInfo non trouvé pour la demande:', r);
+              return null;
+            }
             return (
               <div key={r.id} className="bg-white border rounded-2xl p-3 sm:p-4 space-y-3">
                 {/* Informations du client */}
@@ -571,9 +573,9 @@ function TabIban({ users, requests, load }) {
                     <p className="text-[12px] font-medium text-slate-700">Attribuer un IBAN manuellement</p>
                     <div className="space-y-2">
                       <div>
-                        <label className="text-[10px] text-slate-500">IBAN (format variable par pays)</label>
+                        <label className="text-[10px] text-slate-500">IBAN (format libre)</label>
                         <input 
-                          placeholder="FRXX XXXX XXXX XXXX XXXX XXXX XXX (27)" 
+                          placeholder="FR7630006000011234567890189 ou autre format" 
                           className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
                           value={ibanForm[r.user_id || r.userId]?.iban || ''}
                           onChange={(e) => setIbanForm((x) => ({ 
