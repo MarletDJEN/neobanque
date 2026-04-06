@@ -35,6 +35,7 @@ router.post('/admin/users/:id/status', authMiddleware, adminMiddleware, adminCtl
 router.post('/admin/users/:id/iban', authMiddleware, adminMiddleware, adminCtl.assignIban);
 router.post('/admin/kyc/:id/approve', authMiddleware, adminMiddleware, adminCtl.approveKyc);
 router.post('/admin/kyc/:id/reject', authMiddleware, adminMiddleware, adminCtl.rejectKyc);
+router.post('/admin/users/:id/kyc-quick', authMiddleware, adminMiddleware, adminCtl.approveKyc);
 router.post('/admin/users/:userId/card/activate', authMiddleware, adminMiddleware, adminCtl.activateCard);
 router.post('/admin/users/:userId/card/block', authMiddleware, adminMiddleware, adminCtl.blockCardAdmin);
 router.post('/admin/users/:id/deposit', authMiddleware, adminMiddleware, adminCtl.adminDeposit);

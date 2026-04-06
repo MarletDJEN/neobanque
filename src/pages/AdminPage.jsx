@@ -213,6 +213,7 @@ function TabOverview({ users, totalBalance, pendingIban, pendingCards, pendingAc
 function TabClients({ users, accounts, load }) {
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState(null);
+  const [ibanForm, setIbanForm] = useState({});
   const filtered = users.filter((u) => !q || `${u.displayName} ${u.email}`.toLowerCase().includes(q.toLowerCase()));
 
   const acc = (id) => accounts.find((a) => a.id === id);
@@ -236,6 +237,18 @@ function TabClients({ users, accounts, load }) {
     toast.success('KYC approuvé');
     load();
   };
+  const assignIban = async (userId) => {
+    const f = ibanForm[userId] || {};
+    if (!f.iban?.trim() || !f.bic?.trim()) return toast.error('IBAN et BIC requis');
+    try {
+      await api.post(`/admin/users/${userId}/iban`, { iban: f.iban.trim(), bic: f.bic.trim() });
+      toast.success('IBAN attribué avec succès');
+      setIbanForm(prev => ({ ...prev, [userId]: {} })); // Vider le formulaire
+      load();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erreur lors de l\'attribution IBAN');
+    }
+  };
 
   if (selected) {
     const u = users.find((x) => x.id === selected);
@@ -258,6 +271,46 @@ function TabClients({ users, accounts, load }) {
             </div>
           </div>
           <p className="text-[12px] sm:text-[13px] font-mono font-semibold text-teal-700">{fmt(a?.balance)}</p>
+          
+          {/* Informations IBAN/BIC */}
+          <div className="mt-3 p-3 bg-slate-50 rounded-xl">
+            <p className="text-[11px] font-semibold text-slate-700 mb-2">Informations bancaires</p>
+            {u.iban ? (
+              <div className="space-y-1">
+                <p className="text-[10px] font-mono text-slate-600">IBAN: {u.iban}</p>
+                <p className="text-[10px] font-mono text-slate-600">BIC: {u.bic || 'Non défini'}</p>
+                <Chip color={u.ibanStatus === 'approved' ? 'green' : u.ibanStatus === 'pending' ? 'amber' : 'gray'}>
+                  {u.ibanStatus === 'approved' ? 'Attribué' : u.ibanStatus === 'pending' ? 'En attente' : 'Aucun'}
+                </Chip>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[10px] text-slate-500">Aucun IBAN attribué</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input 
+                    placeholder="IBAN" 
+                    className="px-2 py-1 border rounded text-[10px] font-mono"
+                    value={ibanForm[u.id]?.iban || ''}
+                    onChange={(e) => setIbanForm(prev => ({ ...prev, [u.id]: { ...prev[u.id], iban: e.target.value } }))}
+                  />
+                  <input 
+                    placeholder="BIC" 
+                    className="px-2 py-1 border rounded text-[10px] font-mono"
+                    value={ibanForm[u.id]?.bic || ''}
+                    onChange={(e) => setIbanForm(prev => ({ ...prev, [u.id]: { ...prev[u.id], bic: e.target.value } }))}
+                  />
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => assignIban(u.id)}
+                  className="w-full py-1.5 bg-teal-600 text-white rounded text-[10px] font-medium"
+                >
+                  Attribuer IBAN
+                </button>
+              </div>
+            )}
+          </div>
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
             {u.accountStatus === 'pending' && (
               <button type="button" onClick={() => verify(u.id)} className="col-span-1 sm:col-span-2 py-2.5 bg-teal-700 text-white rounded-xl text-[11px] sm:text-[12px] font-semibold flex items-center justify-center gap-1">
@@ -294,20 +347,49 @@ function TabClients({ users, accounts, load }) {
           className="w-full pl-9 pr-4 py-2.5 bg-white border rounded-xl text-[12px]" />
       </div>
       <div className="space-y-2">
-        {filtered.map((u) => (
-          <button type="button" key={u.id} onClick={() => setSelected(u.id)}
-            className="w-full bg-white border rounded-2xl p-3 sm:p-4 flex items-center gap-3 text-left hover:border-teal-200">
-            <Avatar name={u.displayName || u.email} />
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] sm:text-[13px] font-medium truncate">{u.displayName}</p>
-              <p className="text-[10px] sm:text-[11px] text-slate-400 truncate">{u.email}</p>
-            </div>
-            <div className="text-right">
-              <span className="font-mono text-[11px] sm:text-[13px] block">{fmt(acc(u.id)?.balance)}</span>
-              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-300 ml-auto mt-0.5" />
-            </div>
-          </button>
-        ))}
+        {filtered.map((u) => {
+          const account = acc(u.id);
+          return (
+            <button type="button" key={u.id} onClick={() => setSelected(u.id)}
+              className="w-full bg-white border rounded-2xl p-3 sm:p-4 text-left hover:border-teal-200">
+              <div className="flex items-start gap-3">
+                <Avatar name={u.displayName || u.email} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-[12px] sm:text-[13px] font-medium truncate">{u.displayName}</p>
+                    <Chip color={u.accountStatus === 'active' ? 'green' : u.accountStatus === 'suspended' ? 'red' : 'amber'}>
+                      {u.accountStatus}
+                    </Chip>
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-slate-400 truncate mb-2">{u.email}</p>
+                  
+                  {/* Informations supplémentaires */}
+                  <div className="flex flex-wrap gap-2 text-[10px]">
+                    <Chip color="blue">
+                      KYC: {u.kycStatus === 'approved' ? '✅' : u.kycStatus === 'pending' ? '⏳' : '❌'}
+                    </Chip>
+                    {u.iban ? (
+                      <Chip color="green">
+                        IBAN: ✅
+                      </Chip>
+                    ) : (
+                      <Chip color="gray">
+                        IBAN: ❌
+                      </Chip>
+                    )}
+                    <span className="text-slate-500">
+                      Créé: {new Date(u.createdAt).toLocaleDateString('fr-FR')}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono text-[11px] sm:text-[13px] block">{fmt(account?.balance)}</span>
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-300 ml-auto mt-0.5" />
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
