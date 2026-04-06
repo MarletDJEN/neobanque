@@ -91,6 +91,12 @@ export async function listAllData(req, res) {
        JOIN users u ON u.id = t.user_id
        ORDER BY t.created_at DESC LIMIT 100`
     );
+    const kycSubmissions = await pool.query(
+      `SELECT ks.*, u.email, u.name 
+       FROM kyc_submissions ks
+       JOIN users u ON u.id = ks.user_id
+       ORDER BY ks.created_at DESC`
+    );
     
     res.json({
       users: users.rows.map(mapUserAdminRow),
@@ -98,7 +104,8 @@ export async function listAllData(req, res) {
       accounts,
       requests: requests.rows,
       cards: cards.rows,
-      transactions: transactions.rows.map(toTransactionRow)
+      transactions: transactions.rows.map(toTransactionRow),
+      kycSubmissions: kycSubmissions.rows
     });
   } catch (e) {
     console.error('Erreur dans listAllData:', e);
@@ -251,16 +258,16 @@ export async function approveKyc(req, res) {
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
-    const k = await cli.query(`SELECT * FROM kyc_submissions WHERE user_id = $1`, [id]);
+    const k = await cli.query(`SELECT * FROM kyc_submissions WHERE id = $1`, [id]);
     if (k.rowCount === 0) {
       await cli.query('ROLLBACK');
-      return res.status(404).json({ error: 'Demande KYC introuvable pour cet utilisateur' });
+      return res.status(404).json({ error: 'Demande KYC introuvable' });
     }
-    await cli.query(`UPDATE kyc_submissions SET status = 'approved', reviewed_at = now() WHERE user_id = $1`, [id]);
-    await cli.query(`UPDATE users SET kyc_status = 'approved' WHERE id = $1`, [id]);
+    await cli.query(`UPDATE kyc_submissions SET status = 'approved', reviewed_at = now() WHERE id = $1`, [id]);
+    await cli.query(`UPDATE users SET kyc_status = 'approved' WHERE id = $1`, [k.rows[0].user_id]);
     await insertNotification(
       cli,
-      id,
+      k.rows[0].user_id,
       'KYC validé',
       'Votre vérification d\'identité a été approuvée.'
     );
@@ -284,19 +291,19 @@ export async function rejectKyc(req, res) {
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
-    const k = await cli.query(`SELECT * FROM kyc_submissions WHERE user_id = $1`, [id]);
+    const k = await cli.query(`SELECT * FROM kyc_submissions WHERE id = $1`, [id]);
     if (k.rowCount === 0) {
       await cli.query('ROLLBACK');
-      return res.status(404).json({ error: 'Demande KYC introuvable pour cet utilisateur' });
+      return res.status(404).json({ error: 'Demande KYC introuvable' });
     }
     await cli.query(
-      `UPDATE kyc_submissions SET status = 'rejected', reject_reason = $2, reviewed_at = now() WHERE user_id = $1`,
+      `UPDATE kyc_submissions SET status = 'rejected', reject_reason = $2, reviewed_at = now() WHERE id = $1`,
       [id, reason.trim()]
     );
-    await cli.query(`UPDATE users SET kyc_status = 'rejected' WHERE id = $1`, [id]);
+    await cli.query(`UPDATE users SET kyc_status = 'rejected' WHERE id = $1`, [k.rows[0].user_id]);
     await insertNotification(
       cli,
-      id,
+      k.rows[0].user_id,
       'KYC rejeté',
       `Motif : ${reason.trim()}`
     );

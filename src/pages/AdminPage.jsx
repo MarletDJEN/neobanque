@@ -79,14 +79,15 @@ export default function AdminPage() {
   const requests = data?.requests || [];
   const cardsAdmin = data?.cards || [];
   const transactions = data?.transactions || [];
+  const kycSubmissions = data?.kycSubmissions || [];
 
   const pendingIban = requests.filter((r) => (r.type === 'iban_request' || r.step === 'iban_request') && r.status === 'pending').length;
-  const pendingKyc = requests.filter((r) => r.type === 'kyc_verification' && r.status === 'pending').length;
+  const pendingKyc = kycSubmissions.filter((r) => r.status === 'pending').length;
   const pendingCards = cardsAdmin.filter((c) => c.status === 'pending').length;
   const pendingAccounts = users.filter((u) => u.accountStatus === 'pending').length;
   const pendingActivations = requests.filter((r) => r.step === 'transfer_proof' && r.status === 'pending').length;
   const totalBalance = accounts.reduce((s, a) => s + (a.balance || 0), 0);
-  const shared = { users, requests, accounts, cards: cardsAdmin, transactions, setTab, load, adminId: user?.id };
+  const shared = { users, requests, accounts, cards: cardsAdmin, transactions, kycSubmissions, setTab, load, adminId: user?.id };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -395,9 +396,9 @@ function TabClients({ users, accounts, load }) {
   );
 }
 
-function TabKyc({ requests, load }) {
+function TabKyc({ kycSubmissions, load }) {
   const [reasons, setReasons] = useState({});
-  const pending = requests.filter((r) => r.type === 'kyc_verification' && r.status === 'pending');
+  const pending = kycSubmissions.filter((r) => r.status === 'pending');
   const approve = async (id) => {
     await api.post(`/admin/kyc/${id}/approve`);
     toast.success('KYC approuvé');
@@ -416,13 +417,13 @@ function TabKyc({ requests, load }) {
       {pending.length === 0 && <p className="text-slate-500 text-[13px]">Aucune demande en attente.</p>}
       {pending.map((req) => (
         <div key={req.id} className="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4">
-          <p className="font-medium text-[12px] sm:text-[13px]">{req.userName || req.userEmail}</p>
+          <p className="font-medium text-[12px] sm:text-[13px]">{req.name || req.email}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-            {req.selfieUrl && (
-              <a href={req.selfieUrl} target="_blank" rel="noreferrer" className="text-[11px] sm:text-[12px] text-teal-700 underline">Voir selfie</a>
+            {req.selfie_url && (
+              <a href={req.selfie_url} target="_blank" rel="noreferrer" className="text-[11px] sm:text-[12px] text-teal-700 underline">Voir selfie</a>
             )}
-            {req.idDocumentUrl && (
-              <a href={req.idDocumentUrl} target="_blank" rel="noreferrer" className="text-[11px] sm:text-[12px] text-teal-700 underline">Voir pièce</a>
+            {req.document_url && (
+              <a href={req.document_url} target="_blank" rel="noreferrer" className="text-[11px] sm:text-[12px] text-teal-700 underline">Voir pièce</a>
             )}
           </div>
           <textarea value={reasons[req.id] || ''} onChange={(e) => setReasons((x) => ({ ...x, [req.id]: e.target.value }))}
