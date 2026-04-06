@@ -174,6 +174,7 @@ export async function verifyUser(req, res) {
       'Compte activé !',
       `Votre compte NeoBank a été validé par l'administrateur. Vous pouvez utiliser les services.${generateIban ? ` Votre IBAN : ${iban.slice(0, 8)}…` : ''}${initialBalance ? ` Crédit initial : ${initialBalance}€` : ''}`
     );
+    console.log('DEBUG: notification compte activé envoyée à', id);
     
     await cli.query('COMMIT');
     const u = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
