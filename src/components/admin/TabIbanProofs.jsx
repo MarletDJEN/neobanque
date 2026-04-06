@@ -9,8 +9,15 @@ function TabIbanProofs({ users, requests, load }) {
   const [selectedProof, setSelectedProof] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Filtrer les preuves de virement (transfer_proof)
-  const transferProofs = requests.filter((r) => r.step === 'transfer_proof' || r.type === 'transfer_proof');
+  // Filtrer les preuves de virement (transfer_proof depuis account_activation_requests)
+  const transferProofs = requests.filter((r) => {
+    // Les preuves peuvent venir de account_activation_requests ou avoir un type direct
+    return (
+      (r.step === 'transfer_proof' && r.status) || // Depuis account_activation_requests
+      (r.type === 'transfer_proof' && r.status) || // Type direct si disponible
+      (r.status === 'pending' && !r.step && !r.type) // Fallback pour les demandes sans step/type
+    );
+  });
   const pending = transferProofs.filter((r) => r.status === 'pending');
   const approved = transferProofs.filter((r) => r.status === 'approved');
   const rejected = transferProofs.filter((r) => r.status === 'rejected');

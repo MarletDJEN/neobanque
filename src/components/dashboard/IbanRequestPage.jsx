@@ -18,7 +18,15 @@ export default function IbanRequestPage({ account, onRefresh }) {
   const status = account?.ibanStatus || 'none';
   
   // Debug pour voir les données
-  console.log('DEBUG IbanRequestPage:', { account, status, iban: account?.iban, ibanProof: account?.ibanProof });
+  console.log('DEBUG IbanRequestPage:', { 
+    account, 
+    status, 
+    iban: account?.iban, 
+    ibanProof: account?.ibanProof,
+    ibanStatus: account?.ibanStatus,
+    // Vérifier les conditions
+    shouldShowDepositStep: status === 'assigned'
+  });
   
   const handleRequestIban = async () => {
     setLoading(true);
