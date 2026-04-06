@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [card, setCard] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [lastAccountStatus, setLastAccountStatus] = useState(null);
   
   // Référence pour éviter les re-renders infinis
   const loadDashboardRef = useRef(null);
@@ -53,7 +54,32 @@ export default function DashboardPage() {
   const loadDashboard = useCallback(async () => {
     try {
       const { data } = await api.get('/me');
-      setAccount(data.account);
+      const newAccount = data.account;
+      
+      // Détecter les changements de statut du compte
+      if (lastAccountStatus && newAccount) {
+        const wasInactive = !(lastAccountStatus?.status === 'active' && lastAccountStatus?.accountVerified);
+        const isActiveNow = newAccount?.status === 'active' && newAccount?.accountVerified;
+        
+        // Notification si l'IBAN vient d'être activé
+        if (wasInactive && isActiveNow) {
+          toast.success('🎉 Votre IBAN est maintenant activé !', {
+            duration: 5000,
+            position: 'top-center'
+          });
+        }
+        
+        // Notification si l'IBAN vient d'être attribué
+        if (!lastAccountStatus?.iban && newAccount?.iban) {
+          toast.success('📋 Votre IBAN a été attribué !', {
+            duration: 4000,
+            position: 'top-center'
+          });
+        }
+      }
+      
+      setAccount(newAccount);
+      setLastAccountStatus(newAccount);
       setTransactions(data.transactions || []);
       setNotifications(data.notifications || []);
       setCard(data.card);
@@ -66,7 +92,7 @@ export default function DashboardPage() {
       toast.error('Erreur lors du chargement des données');
       console.error('Dashboard load error:', error);
     }
-  }, [navigate]);
+  }, [navigate, lastAccountStatus]);
 
   // Stocker la fonction dans la référence pour éviter les re-renders
   loadDashboardRef.current = loadDashboard;
@@ -75,9 +101,36 @@ export default function DashboardPage() {
     // Utiliser la référence pour éviter les re-rendres infinis
     const currentLoad = loadDashboardRef.current;
     currentLoad();
-    const t = setInterval(() => currentLoad(), 30000); // Augmenté à 30s pour moins de stress
-    return () => clearInterval(t);
-  }, []); // Tableau vide pour n'exécuter qu'une fois
+    
+    // Polling intelligent : plus rapide pendant le processus d'activation
+    const getPollingInterval = () => {
+      const isActivating = account?.iban && !(account?.status === 'active' && account?.accountVerified);
+      return isActivating ? 3000 : 8000; // 3s si en cours d'activation, 8s sinon
+    };
+    
+    const t = setInterval(() => currentLoad(), getPollingInterval());
+    
+    // Rafraîchir quand la fenêtre redevient visible (quand l'utilisateur revient sur l'onglet)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        currentLoad();
+      }
+    };
+    
+    // Rafraîchir quand la fenêtre reprend le focus
+    const handleFocus = () => {
+      currentLoad();
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [account]); // Ajout de account pour recalculer l'intervalle
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const isPending = userProfile?.accountStatus === 'pending' || account?.status === 'pending';
@@ -85,6 +138,11 @@ export default function DashboardPage() {
   const isLockedOps = isPending || isSuspended;
 
   const renderPage = () => {
+    // Rafraîchir les données quand on navigue vers la page d'activation
+    if (activePage === 'activation') {
+      setTimeout(() => loadDashboard(), 100);
+    }
+    
     if (isLockedOps && ['transfer', 'iban', 'card'].includes(activePage)) {
       return <PendingBanner suspended={isSuspended} />;
     }

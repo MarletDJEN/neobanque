@@ -71,16 +71,6 @@ export default function Overview({ account, transactions, notifications, onNavig
             </p>
           </div>
         )}
-        {account?.iban && !(account?.status === 'active' && account?.accountVerified) && (
-          <div className="bg-blue-50 border-b border-blue-200 px-4 md:px-5 py-2.5 flex items-center gap-2.5 overflow-hidden">
-            <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5 animate-pulse" />
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] md:text-[12px] text-blue-800 font-medium leading-snug animate-pulse">
-                IBAN <strong>inactif</strong> - Veuillez compléter le processus d'activation pour utiliser tous les services.
-              </p>
-            </div>
-          </div>
-        )}
         {userProfile?.kycStatus === 'pending' && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center flex-shrink-0">
