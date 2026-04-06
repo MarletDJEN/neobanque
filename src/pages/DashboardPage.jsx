@@ -147,8 +147,6 @@ export default function DashboardPage() {
         return <CardPage card={card} onRefresh={loadDashboard} />;
       case 'iban':
         return <IbanRequestPage account={account} onRefresh={loadDashboard} />;
-      case 'iban-activation':
-        return <IbanActivationPage account={account} onBack={() => setActivePage('overview')} onSuccess={loadDashboard} />;
       case 'transactions':
         return <TransactionsPage transactions={transactions} onRefresh={loadDashboard} />;
       case 'transfer':
