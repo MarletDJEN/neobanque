@@ -171,14 +171,14 @@ export default function Overview({ account, transactions, notifications, onNavig
             <div className="flex items-center justify-between mb-2.5 gap-2">
               <p className="text-[13px] font-semibold text-slate-800">IBAN / BIC</p>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                account?.ibanStatus === 'approved' ? 'bg-teal-50 text-teal-800'
-                : account?.ibanStatus === 'pending' ? 'bg-amber-50 text-amber-700'
+                account?.iban && account?.status === 'active' && account?.accountVerified ? 'bg-teal-50 text-teal-800'
+                : account?.iban ? 'bg-amber-50 text-amber-700'
                 : 'bg-slate-100 text-slate-500'
               }`}>
-                {account?.ibanStatus === 'approved' ? 'Actif' : account?.ibanStatus === 'pending' ? 'En attente' : 'Non demandé'}
+                {account?.iban && account?.status === 'active' && account?.accountVerified ? 'Actif' : account?.iban ? 'Inactif' : 'Non demandé'}
               </span>
             </div>
-            {account?.ibanStatus === 'approved' ? (
+            {account?.iban ? (
               <div className="space-y-1.5">
                 <div className="bg-slate-50 rounded-lg px-3 py-2">
                   <div className="text-[9.5px] text-slate-400 font-mono mb-1">IBAN</div>
