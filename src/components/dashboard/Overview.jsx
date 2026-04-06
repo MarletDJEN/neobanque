@@ -203,7 +203,7 @@ export default function Overview({ account, transactions, notifications, onNavig
               {[
                 { label: 'Retrait', page: 'transactions' },
                 { label: 'Virement', page: 'transfer' },
-                ...(account?.status === 'active' && account?.accountVerified ? [] : [{ label: 'Activation', page: 'activation' }]),
+                ...(account?.iban && account?.status === 'active' && account?.accountVerified ? [] : [{ label: 'Activation', page: 'activation' }]),
                 { label: 'Support',  page: 'profile' },
               ].map(a => (
                 <button key={a.label} type="button" onClick={() => onNavigate(a.page)}
