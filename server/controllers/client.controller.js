@@ -334,24 +334,47 @@ export async function submitKyc(req, res) {
   if (!selfieUrl || !documentUrl) {
     return res.status(400).json({ error: 'Documents requis' });
   }
+  
+  // Valider les URLs base64
+  if (!selfieUrl.startsWith('data:image/') || !documentUrl.startsWith('data:image/')) {
+    return res.status(400).json({ error: 'Format de document invalide' });
+  }
+  
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
+    
+    // Vérifier si l'utilisateur a déjà une soumission KYC en cours
+    const existing = await cli.query(
+      `SELECT id FROM kyc_submissions WHERE user_id = $1 AND status IN ('pending', 'submitted')`,
+      [req.userId]
+    );
+    if (existing.rowCount > 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Une demande KYC est déjà en cours de traitement' });
+    }
+    
+    // Mettre à jour le statut KYC de l'utilisateur
     await cli.query(
       `UPDATE users SET kyc_status = 'submitted' WHERE id = $1`,
       [req.userId]
     );
+    
+    // Insérer la nouvelle soumission KYC
     await cli.query(
       `INSERT INTO kyc_submissions (user_id, selfie_url, document_url, status) VALUES ($1, $2, $3, 'pending')`,
       [req.userId, String(selfieUrl).slice(0, 2048), String(documentUrl).slice(0, 2048)]
     );
+    
     await cli.query('COMMIT');
+    
+    // Récupérer le profil utilisateur mis à jour
     const u = await pool.query('SELECT * FROM users WHERE id = $1', [req.userId]);
     res.json({ user: toUserProfile(u.rows[0]) });
   } catch (e) {
     await cli.query('ROLLBACK');
-    console.error(e);
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error('Erreur lors de la soumission KYC:', e);
+    res.status(500).json({ error: 'Erreur serveur lors de la soumission KYC' });
   } finally {
     cli.release();
   }

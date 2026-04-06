@@ -59,7 +59,23 @@ export default function ProfilePage({ onSaved }) {
   };
 
   const uploadKyc = async () => {
-    if (!selfieFile || !idFile) return;
+    if (!selfieFile || !idFile) {
+      toast.error('Veuillez sélectionner les deux documents');
+      return;
+    }
+    
+    // Valider la taille des fichiers (max 5MB)
+    if (selfieFile.size > 5 * 1024 * 1024 || idFile.size > 5 * 1024 * 1024) {
+      toast.error('Les fichiers ne doivent pas dépasser 5MB');
+      return;
+    }
+    
+    // Valider le type des fichiers
+    if (!selfieFile.type.startsWith('image/') || !idFile.type.startsWith('image/')) {
+      toast.error('Veuillez sélectionner des images valides (JPG, PNG, etc.)');
+      return;
+    }
+    
     setKycLoading(true);
     try {
       const selfieUrl = await readFileAsDataUrl(selfieFile);
@@ -68,10 +84,12 @@ export default function ProfilePage({ onSaved }) {
       setUserProfile((p) => ({ ...p, ...data.user }));
       setSelfieFile(null);
       setIdFile(null);
-      toast.success('Demande KYC envoyée !');
+      toast.success('Demande KYC envoyée avec succès !');
       onSaved?.();
     } catch (e) {
-      toast.error(e.response?.data?.error || 'Erreur lors de l’envoi');
+      console.error('Erreur KYC:', e);
+      const errorMessage = e.response?.data?.error || 'Erreur lors de l\'envoi des documents';
+      toast.error(errorMessage);
     } finally {
       setKycLoading(false);
     }
@@ -116,16 +134,55 @@ export default function ProfilePage({ onSaved }) {
       </form>
       {userProfile?.kycStatus !== 'approved' && (
         <div className="bg-white border border-slate-100 rounded-xl p-5 space-y-3">
-          <p className="text-[13px] font-medium flex items-center gap-2"><Upload className="w-4 h-4" /> KYC</p>
-          <label className="block text-[11px] text-slate-500">Selfie
-            <input type="file" accept="image/*" onChange={(e) => setSelfieFile(e.target.files?.[0] || null)} className="block mt-1 text-[12px]" />
-          </label>
-          <label className="block text-[11px] text-slate-500">Pièce d’identité
-            <input type="file" accept="image/*" onChange={(e) => setIdFile(e.target.files?.[0] || null)} className="block mt-1 text-[12px]" />
-          </label>
-          <button type="button" onClick={uploadKyc} disabled={kycLoading || !selfieFile || !idFile}
-            className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[12px] font-semibold disabled:opacity-50">
-            {kycLoading ? 'Envoi…' : 'Envoyer les documents'}
+          <p className="text-[13px] font-medium flex items-center gap-2"><Upload className="w-4 h-4" /> Vérification d'identité (KYC)</p>
+          
+          <div className="text-[11px] text-slate-500 space-y-1">
+            <p>• Format : Images uniquement (JPG, PNG, etc.)</p>
+            <p>• Taille maximale : 5MB par fichier</p>
+            <p>• Documents requis : Selfie + Pièce d'identité</p>
+          </div>
+          
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] text-slate-500 mb-1">Selfie (photo portrait)</label>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={(e) => setSelfieFile(e.target.files?.[0] || null)} 
+                className="block w-full text-[12px] file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100" 
+              />
+              {selfieFile && (
+                <div className="mt-1 text-[10px] text-green-600 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  {selfieFile.name} ({(selfieFile.size / 1024 / 1024).toFixed(2)} MB)
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <label className="block text-[11px] text-slate-500 mb-1">Pièce d'identité (carte d'identité, passeport, etc.)</label>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={(e) => setIdFile(e.target.files?.[0] || null)} 
+                className="block w-full text-[12px] file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100" 
+              />
+              {idFile && (
+                <div className="mt-1 text-[10px] text-green-600 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  {idFile.name} ({(idFile.size / 1024 / 1024).toFixed(2)} MB)
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <button 
+            type="button" 
+            onClick={uploadKyc} 
+            disabled={kycLoading || !selfieFile || !idFile}
+            className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[12px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition"
+          >
+            {kycLoading ? 'Envoi en cours...' : 'Envoyer les documents'}
           </button>
         </div>
       )}
