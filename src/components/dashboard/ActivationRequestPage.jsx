@@ -6,12 +6,12 @@ import { Upload, CheckCircle, AlertCircle, ArrowLeft, CreditCard, FileText } fro
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
 export default function ActivationRequestPage({ account, onBack, onSuccess }) {
-  // Déterminer l'étape initiale en fonction de si l'IBAN est déjà attribué
+  // Déterminer l'étape initiale
   const getInitialStep = () => {
-    return account?.iban ? 'transfer_proof' : 'iban_request';
+    return account?.iban ? 'proof_submission' : 'iban_request';
   };
   
-  const [currentStep, setCurrentStep] = useState(getInitialStep()); // 'iban_request' ou 'transfer_proof'
+  const [currentStep, setCurrentStep] = useState(getInitialStep());
   const [formData, setFormData] = useState({
     amount: '500',
     proofFile: null,
@@ -19,34 +19,12 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
   });
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState([]);
 
   // Mettre à jour l'étape si les données du compte changent
   useEffect(() => {
     setCurrentStep(getInitialStep());
   }, [account?.iban]);
 
-  // Charger les demandes en attente pour vérifier si l'étape 2 est déjà soumise
-  useEffect(() => {
-    const loadPendingRequests = async () => {
-      try {
-        const { data } = await api.get('/admin/activation-requests');
-        const userRequests = data.requests?.filter(r => 
-          r.user_id === account?.id && r.status === 'pending'
-        ) || [];
-        setPendingRequests(userRequests);
-      } catch (e) {
-        console.error('Erreur chargement demandes:', e);
-      }
-    };
-    
-    if (account?.id) {
-      loadPendingRequests();
-    }
-  }, [account?.id]);
-
-  // Vérifier si l'étape 2 est déjà soumise
-  const hasPendingTransferProof = pendingRequests.some(r => r.step === 'transfer_proof');
   const isAccountActivated = account?.status === 'active' && account?.accountVerified;
 
   const handleFileUpload = async (e) => {
@@ -85,23 +63,23 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
     e.preventDefault();
     
     if (currentStep === 'iban_request') {
-      // Première étape : demande d'IBAN
+      // Étape 1 : Demande d'IBAN
       setSubmitting(true);
       try {
         await api.post('/request-account-activation', {
           step: 'iban_request'
         });
         
-        toast.success('Demande d\'IBAN soumise !');
-        setCurrentStep('transfer_proof'); // Passer à l'étape 2
+        toast.success('IBAN attribué avec succès !');
+        onSuccess?.(); // Recharger les données pour afficher le nouvel IBAN
       } catch (err) {
-        toast.error(err.response?.data?.error || 'Erreur lors de la soumission');
+        toast.error(err.response?.data?.error || 'Erreur lors de la demande d\'IBAN');
         console.error(err);
       } finally {
         setSubmitting(false);
       }
-    } else if (currentStep === 'transfer_proof') {
-      // Deuxième étape : preuve de virement
+    } else if (currentStep === 'proof_submission') {
+      // Étape 2 : Envoi de la preuve de virement
       if (!formData.proofFile) {
         toast.error('Veuillez télécharger la preuve de virement');
         return;
@@ -110,7 +88,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
       setSubmitting(true);
       try {
         await api.post('/request-account-activation', {
-          step: 'transfer_proof',
+          step: 'proof_submission',
           amount: parseFloat(formData.amount),
           proofUrl: formData.proofUrl
         });
@@ -139,9 +117,9 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
-            <h1 className="text-[19px] font-semibold tracking-tight">Activation de compte</h1>
+            <h1 className="text-[19px] font-semibold tracking-tight">Activation IBAN</h1>
             <p className="text-[12px] text-slate-500 mt-0.5">
-              Votre compte est déjà activé
+              Votre IBAN est activé
             </p>
           </div>
         </div>
@@ -150,14 +128,30 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
           <div className="flex items-start gap-2">
             <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
             <div className="text-[11.5px] text-green-800">
-              <p className="font-medium mb-1">Compte entièrement activé !</p>
+              <p className="font-medium mb-1">Votre IBAN est activé !</p>
               <p className="text-green-700">
-                Votre compte NeoBank est maintenant actif et vous pouvez utiliser tous les services.
-                {account?.iban && ` Votre IBAN ${account.iban.slice(0, 8)}… est opérationnel.`}
+                Félicitations ! Votre IBAN {account?.iban?.slice(0, 8)}… est maintenant entièrement opérationnel.
+                Vous pouvez utiliser tous les services bancaires sans restriction.
               </p>
             </div>
           </div>
         </div>
+
+        {account?.iban && (
+          <div className="bg-white border border-slate-100 rounded-xl p-4 space-y-3">
+            <div className="text-[13px] font-semibold text-slate-800 mb-2">Vos coordonnées bancaires</div>
+            <div className="space-y-2">
+              <div className="bg-slate-50 rounded-lg px-3 py-2">
+                <div className="text-[9.5px] text-slate-400 font-mono mb-1">IBAN</div>
+                <div className="text-[11px] font-mono font-medium tracking-wide">{account.iban}</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg px-3 py-2">
+                <div className="text-[9.5px] text-slate-400 font-mono mb-1">BIC</div>
+                <div className="text-[11px] font-mono font-medium">{account.bic}</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -175,7 +169,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
         <div>
           <h1 className="text-[19px] font-semibold tracking-tight">Activation de compte</h1>
           <p className="text-[12px] text-slate-500 mt-0.5">
-            Processus de validation en deux étapes
+            Processus en deux étapes
           </p>
         </div>
       </div>
@@ -192,7 +186,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
         </div>
         <div className="w-8 h-0.5 bg-slate-300"></div>
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
-          currentStep === 'transfer_proof' ? 'bg-teal-100 text-teal-700' : 'bg-white text-slate-400'
+          currentStep === 'proof_submission' ? 'bg-teal-100 text-teal-700' : 'bg-white text-slate-400'
         }`}>
           <FileText className="w-4 h-4" />
           <span className="text-[12px] font-medium">Étape 2: Virement</span>
@@ -206,15 +200,15 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
             <div className="text-[11.5px] text-blue-800">
               <p className="font-medium mb-1">Étape 1 : Demande d'IBAN</p>
               <p className="text-blue-700">
-                Cliquez sur "Soumettre la demande" pour recevoir votre IBAN. 
-                Une fois approuvée, vous pourrez passer à l'étape 2.
+                Cliquez sur "Demander mon IBAN" pour recevoir votre numéro IBAN. 
+                Une fois attribué, vous pourrez effectuer le virement de 500€.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {currentStep === 'transfer_proof' && (
+      {currentStep === 'proof_submission' && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
@@ -243,10 +237,10 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
           <div>
             <label className="text-[11px] text-slate-500 font-medium">Type de demande</label>
             <div className="mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[12px]">
-              Demande d'IBAN et BIC
+              Demande d'attribution d'IBAN
             </div>
             <p className="text-[10px] text-slate-400 mt-1">
-              Cette étape permettra de générer votre IBAN pour recevoir le virement
+              Cette étape permettra de générer votre IBAN pour recevoir le virement d'activation
             </p>
           </div>
         ) : (
@@ -256,7 +250,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
               <div className="mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[12px] font-mono">
                 {fmt(500)}
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Montant fixe obligatoire</p>
+              <p className="text-[10px] text-slate-400 mt-1">Montant fixe obligatoire pour l'activation</p>
             </div>
 
             <div>
@@ -302,32 +296,13 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
           </>
         )}
 
-        {/* Afficher un message si l'étape 2 est déjà soumise */}
-        {currentStep === 'transfer_proof' && hasPendingTransferProof && (
-          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 space-y-3">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-              <div className="text-[11.5px] text-amber-800">
-                <p className="font-medium mb-1">Demande en cours de validation</p>
-                <p className="text-amber-700">
-                  Votre preuve de virement a été soumise et est en cours de validation par l'administrateur.
-                  Vous recevrez une notification dès que votre compte sera activé.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Bouton de soumission - masqué si l'étape 2 est déjà soumise */}
-        {!hasPendingTransferProof && (
-          <button
-            type="submit"
-            disabled={submitting || (currentStep === 'transfer_proof' && !formData.proofFile)}
-            className="w-full bg-teal-700 text-white rounded-lg py-2.5 text-[12px] font-semibold hover:bg-teal-800 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
-          >
-            {submitting ? 'Soumission...' : currentStep === 'iban_request' ? 'Soumettre la demande d\'IBAN' : 'Soumettre la preuve de virement'}
-          </button>
-        )}
+        <button
+          type="submit"
+          disabled={submitting || (currentStep === 'proof_submission' && !formData.proofFile)}
+          className="w-full bg-teal-700 text-white rounded-lg py-2.5 text-[12px] font-semibold hover:bg-teal-800 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
+        >
+          {submitting ? 'Soumission...' : currentStep === 'iban_request' ? 'Demander mon IBAN' : 'Soumettre la preuve de virement'}
+        </button>
       </form>
     </div>
   );

@@ -200,6 +200,16 @@ export default function DashboardPage() {
             </p>
           </div>
         )}
+        {account?.iban && !(account?.status === 'active' && account?.accountVerified) && (
+          <div className="bg-blue-50 border-b border-blue-200 px-4 md:px-5 py-2.5 flex items-center gap-2.5 overflow-hidden">
+            <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5 animate-pulse" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] md:text-[12px] text-blue-800 font-medium leading-snug animate-pulse">
+                IBAN <strong>inactif</strong> - Veuillez compléter le processus d&apos;activation pour utiliser tous les services.
+              </p>
+            </div>
+          </div>
+        )}
         <div className="max-w-5xl mx-auto w-full px-4 py-4 md:p-5 flex-1">{renderPage()}</div>
       </main>
 
