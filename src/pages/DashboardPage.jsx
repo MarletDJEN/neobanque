@@ -61,8 +61,18 @@ export default function DashboardPage() {
         const wasInactive = !(lastAccountStatus?.status === 'active' && lastAccountStatus?.accountVerified);
         const isActiveNow = newAccount?.status === 'active' && newAccount?.accountVerified;
         
+        console.log('DEBUG Changement statut compte:', {
+          wasInactive,
+          isActiveNow,
+          lastStatus: lastAccountStatus?.status,
+          newStatus: newAccount?.status,
+          lastVerified: lastAccountStatus?.accountVerified,
+          newVerified: newAccount?.accountVerified
+        });
+        
         // Notification si le compte vient d'être activé
         if (wasInactive && isActiveNow) {
+          console.log('DEBUG: Envoi notification compte activé');
           toast.success('🎉 Votre compte est maintenant activé !', {
             duration: 5000,
             position: 'top-center'

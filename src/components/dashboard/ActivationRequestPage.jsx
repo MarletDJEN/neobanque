@@ -8,7 +8,9 @@ const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency:
 export default function ActivationRequestPage({ account, onBack, onSuccess }) {
   // Déterminer l'étape initiale
   const getInitialStep = () => {
-    return account?.iban ? 'transfer_proof' : 'iban_request';
+    // N'afficher "transfer_proof" que si l'IBAN a été approuvé par l'admin
+    const isIbanApproved = account?.iban && (account?.ibanStatus === 'approved' || account?.ibanStatus === 'active');
+    return isIbanApproved ? 'transfer_proof' : 'iban_request';
   };
   
   const [currentStep, setCurrentStep] = useState(getInitialStep());
@@ -22,8 +24,9 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
 
   // Mettre à jour l'étape si les données du compte changent
   useEffect(() => {
-    setCurrentStep(getInitialStep());
-  }, [account?.iban]);
+    const isIbanApproved = account?.iban && (account?.ibanStatus === 'approved' || account?.ibanStatus === 'active');
+    setCurrentStep(isIbanApproved ? 'transfer_proof' : 'iban_request');
+  }, [account?.iban, account?.ibanStatus]);
 
   const isAccountActivated = account?.status === 'active' && account?.accountVerified;
 
