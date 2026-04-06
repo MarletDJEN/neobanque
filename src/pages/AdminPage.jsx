@@ -8,8 +8,9 @@ import {
   FileText, TrendingUp, Shield, LogOut, CheckCircle,
   XCircle, AlertTriangle, Search, ChevronRight, ChevronLeft,
   Menu, X, Check, Ban, RefreshCw, User, Plus, Minus,
-  MessageSquare, AlertCircle
+  MessageSquare, AlertCircle, Upload
 } from 'lucide-react';
+import TabIbanProofs from '../components/admin/TabIbanProofs';
 
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
@@ -38,6 +39,7 @@ const TABS = [
   { id: 'activation', label: 'Activation Comptes', icon: User },
   { id: 'kyc', label: 'KYC', icon: FileText },
   { id: 'iban', label: 'IBAN / BIC', icon: Globe },
+  { id: 'iban-proofs', label: 'Preuves IBAN', icon: Upload },
   { id: 'cards', label: 'Cartes', icon: CreditCard },
   { id: 'tx', label: 'Dépôts / Retraits', icon: ArrowLeftRight },
   { id: 'modal', label: 'Modal', icon: MessageSquare },
@@ -167,6 +169,7 @@ export default function AdminPage() {
               {tab === 'activation' && <TabActivation {...shared} />}
               {tab === 'kyc' && <TabKyc {...shared} />}
               {tab === 'iban' && <TabIban {...shared} />}
+              {tab === 'iban-proofs' && <TabIbanProofs {...shared} />}
               {tab === 'cards' && <TabCards {...shared} />}
               {tab === 'tx' && <TabTx {...shared} />}
               {tab === 'modal' && <TabModal {...shared} />}
