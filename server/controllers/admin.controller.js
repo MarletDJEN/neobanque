@@ -1,0 +1,346 @@
+import { pool } from '../config/database.js';
+import { toAccount, toTransactionRow, toUserProfile } from '../utils/serialize.js';
+import { insertNotification } from '../utils/notify.js';
+
+function mapUserAdminRow(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.name,
+    name: row.name,
+    role: row.role,
+    phone: row.phone,
+    address: row.address,
+    accountStatus: row.status,
+    kycStatus: row.kyc_status,
+    createdAt: row.created_at,
+    balance: Number(row.balance),
+    iban: row.iban,
+    bic: row.bic,
+    ibanStatus:
+      row.iban_status === 'assigned'
+        ? 'approved'
+        : row.iban_status === 'requested'
+          ? 'pending'
+          : 'none',
+    status: row.status,
+  };
+}
+
+export async function listUsers(req, res) {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM users WHERE role = 'client' ORDER BY created_at DESC`
+    );
+    res.json({ users: r.rows.map(mapUserAdminRow) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+export async function listAllData(req, res) {
+  try {
+    const users = await pool.query(
+      `SELECT * FROM users WHERE role = 'client' ORDER BY created_at DESC`
+    );
+    const accounts = users.rows.map(toAccount);
+    const requests = await pool.query(
+      `SELECT ar.*, u.email, u.name 
+       FROM account_activation_requests ar
+       JOIN users u ON u.id = ar.user_id
+       ORDER BY ar.created_at DESC`
+    );
+    const cards = await pool.query(
+      `SELECT c.*, u.email, u.name 
+       FROM cards c
+       JOIN users u ON u.id = c.user_id
+       ORDER BY c.created_at DESC`
+    );
+    const transactions = await pool.query(
+      `SELECT t.*, u.email, u.name 
+       FROM transactions t
+       JOIN users u ON u.id = t.user_id
+       ORDER BY t.created_at DESC LIMIT 100`
+    );
+    
+    res.json({
+      users: users.rows.map(mapUserAdminRow),
+      allUsers: users.rows.map(mapUserAdminRow),
+      accounts,
+      requests: requests.rows,
+      cards: cards.rows,
+      transactions: transactions.rows.map(toTransactionRow)
+    });
+  } catch (e) {
+    console.error('Erreur dans listAllData:', e);
+    res.status(500).json({ error: 'Erreur lors du chargement des données' });
+  }
+}
+
+export async function verifyUser(req, res) {
+  const { id } = req.params;
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    await cli.query(
+      `UPDATE users SET account_verified = true, status = 'active' WHERE id = $1 AND role = 'client'`,
+      [id]
+    );
+    await insertNotification(
+      cli,
+      id,
+      'Compte activé !',
+      'Votre compte NeoBank a été validé. Vous pouvez utiliser les services.'
+    );
+    await cli.query('COMMIT');
+    const u = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    res.json({ user: mapUserAdminRow(u.rows[0]) });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function setUserStatus(req, res) {
+  const { id } = req.params;
+  const { status } = req.body;
+  if (!['active', 'suspended', 'blocked', 'pending'].includes(status)) {
+    return res.status(400).json({ error: 'Statut invalide' });
+  }
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    await cli.query(`UPDATE users SET status = $1 WHERE id = $2 AND role = 'client'`, [status, id]);
+    const msg =
+      status === 'suspended' || status === 'blocked'
+        ? 'Votre compte a été suspendu par l’administrateur.'
+        : 'Votre compte a été réactivé.';
+    await insertNotification(cli, id, 'Statut du compte', msg);
+    await cli.query('COMMIT');
+    const u = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    res.json({ user: mapUserAdminRow(u.rows[0]) });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function assignIban(req, res) {
+  const { id } = req.params;
+  const { iban, bic } = req.body;
+  if (!iban?.trim() || !bic?.trim()) {
+    return res.status(400).json({ error: 'IBAN et BIC requis' });
+  }
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    await cli.query(
+      `UPDATE users SET iban = $1, bic = $2, iban_status = 'assigned' WHERE id = $3`,
+      [iban.trim(), bic.trim(), id]
+    );
+    await cli.query(
+      `UPDATE iban_requests SET status = 'approved' WHERE user_id = $1 AND status = 'pending'`,
+      [id]
+    );
+    await cli.query(
+      `UPDATE account_activation_requests SET status = 'approved' WHERE user_id = $1 AND step = 'iban_request' AND status = 'pending'`,
+      [id]
+    );
+    await insertNotification(
+      cli,
+      id,
+      'IBAN attribué',
+      `Votre IBAN ${iban.trim().slice(0, 8)}… est actif. Consultez Mon compte.`
+    );
+    await cli.query('COMMIT');
+    const u = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    res.json({ user: mapUserAdminRow(u.rows[0]), account: toAccount(u.rows[0]) });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function approveKyc(req, res) {
+  const { id } = req.params;
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    const k = await cli.query(`SELECT * FROM kyc_submissions WHERE user_id = $1`, [id]);
+    if (k.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande KYC introuvable pour cet utilisateur' });
+    }
+    await cli.query(`UPDATE kyc_submissions SET status = 'approved', reviewed_at = now() WHERE user_id = $1`, [id]);
+    await cli.query(`UPDATE users SET kyc_status = 'approved' WHERE id = $1`, [id]);
+    await insertNotification(
+      cli,
+      id,
+      'KYC validé',
+      'Votre vérification d\'identité a été approuvée.'
+    );
+    await cli.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function rejectKyc(req, res) {
+  const { id } = req.params;
+  const { reason } = req.body;
+  if (!reason?.trim()) {
+    return res.status(400).json({ error: 'Motif requis' });
+  }
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    const k = await cli.query(`SELECT * FROM kyc_submissions WHERE user_id = $1`, [id]);
+    if (k.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande KYC introuvable pour cet utilisateur' });
+    }
+    await cli.query(
+      `UPDATE kyc_submissions SET status = 'rejected', reject_reason = $2, reviewed_at = now() WHERE user_id = $1`,
+      [id, reason.trim()]
+    );
+    await cli.query(`UPDATE users SET kyc_status = 'rejected' WHERE id = $1`, [id]);
+    await insertNotification(
+      cli,
+      id,
+      'KYC rejeté',
+      `Motif : ${reason.trim()}`
+    );
+    await cli.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function activateCard(req, res) {
+  const { userId } = req.params;
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    await cli.query(`UPDATE cards SET status = 'active' WHERE user_id = $1`, [userId]);
+    await cli.query(`UPDATE users SET card_status = 'active' WHERE id = $1`, [userId]);
+    await insertNotification(cli, userId, 'Carte activée', 'Votre carte est active.');
+    await cli.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function blockCardAdmin(req, res) {
+  const { userId } = req.params;
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    await cli.query(`UPDATE cards SET status = 'blocked' WHERE user_id = $1`, [userId]);
+    await cli.query(`UPDATE users SET card_status = 'blocked' WHERE id = $1`, [userId]);
+    await insertNotification(cli, userId, 'Carte bloquée', 'Votre carte a été bloquée par l\'administrateur.');
+    await cli.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function adminDeposit(req, res) {
+  const { id } = req.params;
+  const { amount, bankName } = req.body;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Montant invalide' });
+  }
+  if (!bankName?.trim()) {
+    return res.status(400).json({ error: 'Nom de la banque requis' });
+  }
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    const u = await cli.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [id]);
+    if (u.rowCount === 0 || u.rows[0].role !== 'client') {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Client introuvable' });
+    }
+    await cli.query(`UPDATE users SET balance = balance + $1 WHERE id = $2`, [amount, id]);
+    await cli.query(
+      `INSERT INTO transactions (user_id, type, amount, label, bank_name) VALUES ($1, 'deposit', $2, $3, $4)`,
+      [id, amount, req.body.label || `Dépôt ${bankName}`, bankName.trim()]
+    );
+    await insertNotification(cli, id, 'Crédit sur compte', `+${amount} € (${bankName.trim()}).`);
+    await cli.query('COMMIT');
+    const after = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    res.json({ account: toAccount(after.rows[0]) });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function adminWithdraw(req, res) {
+  const { id } = req.params;
+  const amount = Number(req.body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Montant invalide' });
+  }
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    const u = await cli.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [id]);
+    if (u.rowCount === 0 || u.rows[0].role !== 'client') {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Client introuvable' });
+    }
+    if (Number(u.rows[0].balance) < amount) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solde insuffisant' });
+    }
+    await cli.query(`UPDATE users SET balance = balance - $1 WHERE id = $2`, [amount, id]);
+    await cli.query(
+      `INSERT INTO transactions (user_id, type, amount, label) VALUES ($1, 'withdrawal', $2, $3)`,
+      [id, amount, req.body.label || 'Retrait administrateur']
+    );
+    await insertNotification(cli, id, 'Débit sur compte', `-${amount} € (opération administrative).`);
+    await cli.query('COMMIT');
+    const after = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    res.json({ account: toAccount(after.rows[0]) });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}

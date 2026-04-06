@@ -1,0 +1,213 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/dashboard/Sidebar';
+import MobileTabBar from '../components/dashboard/MobileTabBar';
+import Overview from '../components/dashboard/Overview.jsx';
+import AccountPage from '../components/dashboard/AccountPage';
+import CardPage from '../components/dashboard/CardPage';
+import IbanRequestPage from '../components/dashboard/IbanRequestPage';
+import TransactionsPage from '../components/dashboard/TransactionsPage.jsx';
+import TransferPage from '../components/dashboard/TransferPage.jsx';
+import ProfilePage from '../components/dashboard/ProfilePage.jsx';
+import ActivationRequestPage from '../components/dashboard/ActivationRequestPage.jsx';
+import NotificationsPanel from '../components/dashboard/NotificationsPanel';
+import { Clock, Menu, Ban } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+function PendingBanner({ suspended }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${suspended ? 'bg-red-100' : 'bg-amber-100'}`}>
+        {suspended ? <Ban className="w-8 h-8 text-red-600" /> : <Clock className="w-8 h-8 text-amber-600" />}
+      </div>
+      <h3 className="text-[16px] font-semibold mb-2">{suspended ? 'Compte suspendu' : 'Fonctionnalité indisponible'}</h3>
+      <p className="text-[13px] text-slate-500 max-w-sm">
+        {suspended
+          ? 'Votre compte a été désactivé. Vous ne pouvez pas utiliser cette fonctionnalité.'
+          : 'Votre compte doit d&apos;abord être validé par un administrateur.'}
+      </p>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const { userProfile, refreshProfile } = useAuth();
+  const navigate = useNavigate();
+  const [activePage, setActivePage] = useState('overview');
+  const [account, setAccount] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [card, setCard] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Référence pour éviter les re-renders infinis
+  const loadDashboardRef = useRef(null);
+
+  useEffect(() => {
+    if (userProfile?.role === 'admin') navigate('/admin', { replace: true });
+  }, [userProfile, navigate]);
+
+  const loadDashboard = useCallback(async () => {
+    try {
+      const { data } = await api.get('/me');
+      setAccount(data.account);
+      setTransactions(data.transactions || []);
+      setNotifications(data.notifications || []);
+      setCard(data.card);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        // Token invalide ou expiré, rediriger vers la page de login
+        navigate('/', { replace: true });
+        return;
+      }
+      toast.error('Erreur lors du chargement des données');
+      console.error('Dashboard load error:', error);
+    }
+  }, [navigate]);
+
+  // Stocker la fonction dans la référence pour éviter les re-renders
+  loadDashboardRef.current = loadDashboard;
+
+  useEffect(() => {
+    // Utiliser la référence pour éviter les re-rendres infinis
+    const currentLoad = loadDashboardRef.current;
+    currentLoad();
+    const t = setInterval(() => currentLoad(), 30000); // Augmenté à 30s pour moins de stress
+    return () => clearInterval(t);
+  }, []); // Tableau vide pour n'exécuter qu'une fois
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const isPending = userProfile?.accountStatus === 'pending' || account?.status === 'pending';
+  const isSuspended = userProfile?.accountStatus === 'suspended' || account?.status === 'suspended' || account?.status === 'blocked';
+  const isLockedOps = isPending || isSuspended;
+
+  const renderPage = () => {
+    if (isLockedOps && ['transfer', 'iban', 'card'].includes(activePage)) {
+      return <PendingBanner suspended={isSuspended} />;
+    }
+    switch (activePage) {
+      case 'overview':
+        return (
+          <Overview
+            account={account}
+            card={card}
+            transactions={transactions}
+            notifications={notifications}
+            onNavigate={setActivePage}
+          />
+        );
+      case 'account':
+        return <AccountPage account={account} />;
+      case 'card':
+        return <CardPage card={card} onRefresh={loadDashboard} />;
+      case 'iban':
+        return <IbanRequestPage account={account} onRefresh={loadDashboard} />;
+      case 'transactions':
+        return <TransactionsPage transactions={transactions} onRefresh={loadDashboard} />;
+      case 'transfer':
+        return <TransferPage account={account} onSuccess={loadDashboard} />;
+      case 'profile':
+        return <ProfilePage onSaved={loadDashboard} />;
+      case 'activation':
+        return <ActivationRequestPage account={account} onBack={() => setActivePage('overview')} onSuccess={loadDashboard} />;
+      case 'notifications':
+        return (
+          <NotificationsPanel
+            notifications={notifications}
+            onChanged={loadDashboard}
+          />
+        );
+      default:
+        return (
+          <Overview account={account} card={card} transactions={transactions} onNavigate={setActivePage} />
+        );
+    }
+  };
+
+  const mainMarginClass = sidebarOpen ? 'md:ml-[215px]' : 'md:ml-16';
+
+  return (
+    <div className="flex h-[100dvh] min-h-0 bg-slate-50 overflow-hidden">
+      <div className="hidden md:block">
+        <Sidebar
+          activePage={activePage}
+          onNavigate={setActivePage}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          unreadCount={unreadCount}
+        />
+      </div>
+
+      <div
+        className={`md:hidden fixed inset-0 z-50 transition-[visibility] duration-200 ${mobileMenuOpen ? 'visible' : 'invisible'}`}
+        aria-hidden={!mobileMenuOpen}
+      >
+        <button
+          type="button"
+          className={`absolute inset-0 bg-slate-900/40 transition-opacity duration-200 ${mobileMenuOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={() => setMobileMenuOpen(false)}
+          aria-label="Fermer le menu"
+        />
+        <aside
+          className={`absolute left-0 top-0 bottom-0 w-[min(288px,88vw)] max-w-full bg-white shadow-2xl transition-transform duration-200 ease-out ${
+            mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <Sidebar
+            variant="mobile"
+            onClose={() => setMobileMenuOpen(false)}
+            activePage={activePage}
+            onNavigate={setActivePage}
+            sidebarOpen
+            setSidebarOpen={setSidebarOpen}
+            unreadCount={unreadCount}
+          />
+        </aside>
+      </div>
+
+      <main className={`flex-1 flex flex-col min-w-0 overflow-y-auto overscroll-y-contain transition-[margin] duration-300 ml-0 ${mainMarginClass} pb-[4.75rem] md:pb-0`}>
+        <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-white/90 backdrop-blur-md border-b border-slate-100/90 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 -ml-1 rounded-xl text-slate-700 hover:bg-slate-100 active:bg-slate-200 touch-manipulation"
+            aria-label="Ouvrir le menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-semibold tracking-tight text-slate-900 truncate">NeoBank</p>
+            <p className="text-[10px] text-slate-500 font-medium">Espace client</p>
+          </div>
+        </header>
+
+        {isSuspended && (
+          <div className="bg-red-50 border-b border-red-200 px-4 md:px-5 py-2.5 flex items-start gap-2.5">
+            <Ban className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] md:text-[12px] text-red-900 font-medium leading-snug">
+              Votre compte est <strong>suspendu ou bloqué</strong>. Contactez le support.
+            </p>
+          </div>
+        )}
+        {isPending && !isSuspended && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 md:px-5 py-2.5 md:py-2.5 flex items-start gap-2.5">
+            <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] md:text-[12px] text-amber-800 font-medium leading-snug">
+              Compte en <strong>attente de validation</strong> par l&apos;administrateur.
+            </p>
+          </div>
+        )}
+        <div className="max-w-5xl mx-auto w-full px-4 py-4 md:p-5 flex-1">{renderPage()}</div>
+      </main>
+
+      <MobileTabBar
+        activePage={activePage}
+        onNavigate={setActivePage}
+        onOpenMenu={() => setMobileMenuOpen(true)}
+      />
+    </div>
+  );
+}
