@@ -61,9 +61,9 @@ export default function DashboardPage() {
         const wasInactive = !(lastAccountStatus?.status === 'active' && lastAccountStatus?.accountVerified);
         const isActiveNow = newAccount?.status === 'active' && newAccount?.accountVerified;
         
-        // Notification si l'IBAN vient d'être activé
+        // Notification si le compte vient d'être activé
         if (wasInactive && isActiveNow) {
-          toast.success('🎉 Votre IBAN est maintenant activé !', {
+          toast.success('🎉 Votre compte est maintenant activé !', {
             duration: 5000,
             position: 'top-center'
           });
