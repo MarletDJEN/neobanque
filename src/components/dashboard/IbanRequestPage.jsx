@@ -14,18 +14,15 @@ export default function IbanRequestPage({ account, onRefresh }) {
     proofUrl: ''
   });
   
-  // Déterminer l'état actuel
+  // Déterminer l'étape actuelle
   const status = account?.ibanStatus || 'none';
   
   // Debug pour voir les données
-  console.log('DEBUG IbanRequestPage:', { 
-    account, 
-    status, 
-    iban: account?.iban, 
+  console.log('DEBUG IbanRequestPage - Étape:', status, {
+    account,
+    iban: account?.iban,
     ibanProof: account?.ibanProof,
-    ibanStatus: account?.ibanStatus,
-    // Vérifier les conditions
-    shouldShowDepositStep: status === 'assigned'
+    ibanStatus: account?.ibanStatus
   });
   
   const handleRequestIban = async () => {
@@ -61,7 +58,7 @@ export default function IbanRequestPage({ account, onRefresh }) {
       reader.onload = (event) => {
         const base64Url = event.target.result;
         setFormData(prev => ({ ...prev, proofFile: file, proofUrl: base64Url }));
-        toast.success('Image téléchargée avec succès');
+        toast.success('Preuve téléchargée avec succès');
       };
       reader.readAsDataURL(file);
     } catch (err) {
@@ -72,7 +69,7 @@ export default function IbanRequestPage({ account, onRefresh }) {
     }
   };
 
-  const handleSubmitDeposit = async () => {
+  const handleSubmitProof = async () => {
     if (!formData.proofFile) {
       toast.error('Veuillez télécharger la preuve de virement');
       return;
@@ -86,7 +83,7 @@ export default function IbanRequestPage({ account, onRefresh }) {
         proofUrl: formData.proofUrl
       });
       
-      toast.success('Preuve de virement envoyée ! En attente de validation...');
+      toast.success('Preuve envoyée ! En attente de validation admin...');
       onRefresh?.();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erreur lors de l\'envoi de la preuve');
@@ -104,7 +101,10 @@ export default function IbanRequestPage({ account, onRefresh }) {
         
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5 flex gap-2.5">
           <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-          <p className="text-[11.5px] text-blue-700">L'IBAN vous permet de recevoir des virements. Après attribution, vous devrez déposer 500€ pour l'activer.</p>
+          <div>
+            <h4 className="font-semibold text-[11.5px] text-blue-800 mb-1">Étape 1/4 : Demander votre IBAN</h4>
+            <p className="text-[11px] text-blue-700">Faites votre demande d'IBAN pour recevoir des virements.</p>
+          </div>
         </div>
 
         <div className="bg-white border border-slate-100 rounded-xl p-6 text-center">
@@ -133,32 +133,54 @@ export default function IbanRequestPage({ account, onRefresh }) {
     );
   }
 
-  // Étape 2 : Dépôt de 500€
+  // Étape 2 : Envoyer la preuve de virement
   if (status === 'assigned') {
     return (
       <div className="space-y-4 fade-in max-w-xl">
         <div><h1 className="text-[19px] font-semibold tracking-tight">IBAN / BIC</h1><p className="text-[12px] text-slate-500 mt-0.5">Activation de votre IBAN</p></div>
 
-        {/* Alerte IBAN inactif */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-          <div>
-            <h3 className="font-semibold text-[13px] text-amber-800 mb-1">IBAN attribué mais inactif</h3>
-            <p className="text-[11.5px] text-amber-700">
-              Votre IBAN <span className="font-mono bg-amber-100 px-1 rounded">{account?.iban}</span> a été attribué mais est temporairement inactif.
-            </p>
-            <p className="text-[11.5px] text-amber-700 mt-1">
-              Effectuez un dépôt de 500€ et envoyez la preuve pour l'activer définitivement.
-            </p>
+        {/* Progression */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-blue-800 font-bold">1</span>
+            </div>
+            <div className="flex-1 h-1 bg-blue-200 rounded-full"></div>
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-blue-800 font-bold">2</span>
+            </div>
+            <div className="flex-1 h-1 bg-blue-200 rounded-full"></div>
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-blue-800 font-bold">3</span>
+            </div>
+            <div className="flex-1 h-1 bg-blue-200 rounded-full"></div>
+            <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center">
+              <span className="text-teal-800 font-bold">4</span>
+            </div>
+          </div>
+          <p className="text-center text-[11px] text-blue-700 mt-2">
+            Votre IBAN <span className="font-mono bg-blue-100 px-1 rounded">{account?.iban}</span> est prêt.
+          </p>
+        </div>
+
+        {/* Instructions */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <div>
+              <h4 className="font-semibold text-[13px] text-amber-800 mb-1">Étape 2/4 : Envoyer la preuve de virement</h4>
+              <p className="text-[11px] text-amber-700">Déposez 500€ sur votre IBAN et envoyez la preuve du virement.</p>
+            </div>
           </div>
         </div>
 
+        {/* Formulaire d'envoi */}
         <div className="bg-white border border-slate-100 rounded-xl p-6">
           <div className="text-center mb-6">
             <div className="w-14 h-14 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Upload className="w-7 h-7 text-teal-700" />
             </div>
-            <h3 className="font-semibold text-[14px] mb-2">Preuve de virement</h3>
+            <h3 className="font-semibold text-[14px] mb-2">Envoyer la preuve de virement</h3>
             <p className="text-[12px] text-slate-500 mb-4 max-w-xs mx-auto">
               Montant à déposer : <span className="font-bold text-teal-700">500,00 €</span>
             </p>
@@ -166,7 +188,7 @@ export default function IbanRequestPage({ account, onRefresh }) {
 
           <div>
             <label className="block text-[11px] font-medium text-slate-700 mb-2">
-              Télécharger la preuve de virement
+              Télécharger la preuve (capture d'écran ou reçu)
             </label>
             <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-teal-300 transition-colors">
               <input
@@ -206,7 +228,7 @@ export default function IbanRequestPage({ account, onRefresh }) {
 
           <button
             type="button"
-            onClick={handleSubmitDeposit}
+            onClick={handleSubmitProof}
             disabled={loading || !formData.proofFile}
             className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-teal-700 hover:bg-teal-600 disabled:opacity-60 text-white font-semibold rounded-xl text-[12px] transition mt-6"
           >
@@ -228,13 +250,40 @@ export default function IbanRequestPage({ account, onRefresh }) {
       <div className="space-y-4 fade-in max-w-xl">
         <div><h1 className="text-[19px] font-semibold tracking-tight">IBAN / BIC</h1><p className="text-[12px] text-slate-500 mt-0.5">Coordonnées bancaires internationales</p></div>
 
+        {/* Progression */}
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-green-800 font-bold">1</span>
+            </div>
+            <div className="flex-1 h-1 bg-green-200 rounded-full"></div>
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-green-800 font-bold">2</span>
+            </div>
+            <div className="flex-1 h-1 bg-green-200 rounded-full"></div>
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-green-800 font-bold">3</span>
+            </div>
+            <div className="flex-1 h-1 bg-green-200 rounded-full"></div>
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-green-800 font-bold">4</span>
+            </div>
+          </div>
+          <p className="text-center text-[11px] text-green-700 mt-2">
+            Félicitations ! Votre IBAN est maintenant complètement actif.
+          </p>
+        </div>
+
         <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
           <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 className="w-8 h-8 text-green-600" />
           </div>
           <h3 className="font-semibold text-[16px] text-green-800 mb-2">IBAN activé !</h3>
           <p className="text-[13px] text-green-700 mb-4 max-w-sm mx-auto">
-            Votre IBAN est maintenant complètement actif. Vous pouvez recevoir des virements.
+            Votre IBAN <span className="font-mono bg-green-100 px-1 rounded">{account?.iban}</span> est maintenant complètement actif.
+          </p>
+          <p className="text-[13px] text-green-700 mb-2">
+            Vous pouvez recevoir des virements.
           </p>
           <div className="bg-white border border-green-100 rounded-lg p-4">
             <p className="text-[11px] font-mono text-slate-800">
@@ -249,21 +298,18 @@ export default function IbanRequestPage({ account, onRefresh }) {
     );
   }
 
-  // Fallback : si aucun statut ne correspond, afficher un message
+  // État inconnu
   return (
     <div className="space-y-4 fade-in max-w-xl">
       <div><h1 className="text-[19px] font-semibold tracking-tight">IBAN / BIC</h1><p className="text-[12px] text-slate-500 mt-0.5">Coordonnées bancaires internationales</p></div>
       
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <h3 className="font-semibold text-[13px] text-amber-800 mb-2">État inconnu</h3>
-        <p className="text-[11px] text-amber-700 mb-2">
+        <p className="text-[11px] text-amber-700">
           Statut IBAN : <span className="font-mono">{status}</span>
         </p>
         <p className="text-[11px] text-amber-700">
           IBAN : <span className="font-mono">{account?.iban || 'Non défini'}</span>
-        </p>
-        <p className="text-[11px] text-amber-700">
-          Preuve : <span className="font-mono">{account?.ibanProof ? 'Oui' : 'Non'}</span>
         </p>
         <button 
           onClick={() => onRefresh?.()} 
