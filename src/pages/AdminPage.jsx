@@ -444,12 +444,15 @@ function TabKyc({ kycSubmissions, load }) {
 }
 
 function TabIban({ users, requests, load }) {
-  const pending = requests.filter((r) => (r.type === 'iban_request' || r.step === 'iban_request') && r.status === 'pending');
+  // Montrer TOUTES les demandes IBAN pour debug
+  const allIbanRequests = requests.filter((r) => (r.type === 'iban_request' || r.step === 'iban_request'));
+  const pending = allIbanRequests.filter((r) => r.status === 'pending');
   const [ibanForm, setIbanForm] = useState({});
 
   // Debug pour voir les demandes
   console.log('Toutes les requests:', requests);
-  console.log('Demandes IBAN filtrées:', pending);
+  console.log('Toutes les demandes IBAN (tous statuts):', allIbanRequests);
+  console.log('Demandes IBAN filtrées (pending seulement):', pending);
 
   const assign = async (userId) => {
     const f = ibanForm[userId] || {};
@@ -486,85 +489,126 @@ function TabIban({ users, requests, load }) {
   return (
     <div className="space-y-4">
       <h1 className="text-[18px] font-semibold">Attribution IBAN</h1>
-      {pending.length === 0 && <p className="text-slate-500 text-[13px]">Aucune demande d'IBAN en attente.</p>}
-      {pending.map((r) => {
-        const userInfo = getUserInfo(r.user_id || r.userId);
-        return (
-        <div key={r.id} className="bg-white border rounded-2xl p-3 sm:p-4 space-y-3">
-          {/* Informations du client */}
-          <div className="flex items-start gap-3">
-            <Avatar name={userInfo?.displayName || userInfo?.email || 'Client'} size="lg" />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-[12px] sm:text-[13px]">{userInfo?.displayName || 'Client'}</p>
-              <p className="text-[11px] sm:text-[12px] text-slate-500">{userInfo?.email}</p>
-              <div className="flex flex-wrap gap-2 mt-1">
-                <Chip color={userInfo?.accountStatus === 'active' ? 'green' : userInfo?.accountStatus === 'suspended' ? 'red' : 'amber'}>
-                  {userInfo?.accountStatus || 'pending'}
-                </Chip>
-                <Chip color="blue">
-                  KYC: {userInfo?.kycStatus === 'approved' ? '✅' : '⏳'}
-                </Chip>
-                {userInfo?.phone && (
-                  <span className="text-[10px] text-slate-400">{userInfo.phone}</span>
+      
+      {/* Debug info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
+        <p className="text-[11px] text-blue-800">
+          <strong>Debug:</strong> {allIbanRequests.length} demande(s) IBAN trouvée(s) au total
+        </p>
+        <p className="text-[11px] text-blue-700">
+          {pending.length} en attente, {allIbanRequests.length - pending.length} déjà traitée(s)
+        </p>
+      </div>
+
+      {allIbanRequests.length === 0 ? (
+        <p className="text-slate-500 text-[13px]">Aucune demande d'IBAN trouvée.</p>
+      ) : (
+        <>
+          {pending.length === 0 ? (
+            <p className="text-amber-600 text-[13px] mb-4">Aucune demande d'IBAN en attente.</p>
+          ) : (
+            <p className="text-teal-600 text-[13px] mb-4">{pending.length} demande(s) d'IBAN en attente:</p>
+          )}
+          
+          {allIbanRequests.map((r) => {
+            const userInfo = getUserInfo(r.user_id || r.userId);
+            return (
+              <div key={r.id} className="bg-white border rounded-2xl p-3 sm:p-4 space-y-3">
+                {/* Informations du client */}
+                <div className="flex items-start gap-3">
+                  <Avatar name={userInfo?.displayName || userInfo?.email || 'Client'} size="lg" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-[12px] sm:text-[13px]">{userInfo?.displayName || 'Client'}</p>
+                    <p className="text-[11px] sm:text-[12px] text-slate-500">{userInfo?.email}</p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      <Chip color={userInfo?.accountStatus === 'active' ? 'green' : userInfo?.accountStatus === 'suspended' ? 'red' : 'amber'}>
+                        {userInfo?.accountStatus || 'pending'}
+                      </Chip>
+                      <Chip color="blue">
+                        KYC: {userInfo?.kycStatus === 'approved' ? '✅' : '⏳'}
+                      </Chip>
+                      {userInfo?.phone && (
+                        <span className="text-[10px] text-slate-400">{userInfo.phone}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Date de la demande */}
+                <div className="text-[11px] text-slate-400">
+                  Demandé le {new Date(r.created_at).toLocaleDateString('fr-FR')} à {new Date(r.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                
+                {/* Statut de la demande */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[11px] text-slate-600">Statut:</span>
+                  <Chip color={r.status === 'pending' ? 'amber' : r.status === 'approved' ? 'green' : 'red'}>
+                    {r.status}
+                  </Chip>
+                </div>
+                
+                {/* Formulaire IBAN/BIC */}
+                {r.status === 'pending' && (
+                  <div className="space-y-3 border-t pt-3">
+                    <p className="text-[12px] font-medium text-slate-700">Attribuer un IBAN manuellement</p>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-[10px] text-slate-500">IBAN (27 caractères)</label>
+                        <input 
+                          placeholder="FRXX XXXX XXXX XXXX XXXX XXXX XXX" 
+                          className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
+                          value={ibanForm[r.user_id || r.userId]?.iban || ''}
+                          onChange={(e) => setIbanForm((x) => ({ 
+                            ...x, 
+                            [r.user_id || r.userId]: { 
+                              ...x[r.user_id || r.userId], 
+                              iban: formatIban(e.target.value) 
+                            } 
+                          }))}
+                          maxLength={27}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500">BIC (optionnel)</label>
+                        <input 
+                          placeholder="BNPAFRPPXXX" 
+                          className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
+                          value={ibanForm[r.user_id || r.userId]?.bic || ''}
+                          onChange={(e) => setIbanForm((x) => ({ 
+                            ...x, 
+                            [r.user_id || r.userId]: { 
+                              ...x[r.user_id || r.userId], 
+                              bic: e.target.value.toUpperCase() 
+                            } 
+                          }))}
+                          maxLength={11}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 )}
+                
+                {r.status === 'approved' && (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+                    <p className="text-[11px] text-green-800">
+                      <strong>IBAN déjà attribué</strong> - Cette demande a été traitée
+                    </p>
+                  </div>
+                )}
+                
+                <button 
+                  type="button" 
+                  onClick={() => r.status === 'pending' ? assign(r.user_id || r.userId) : null}
+                  disabled={r.status !== 'pending'}
+                  className="w-full py-2.5 bg-teal-700 text-white rounded-xl text-[11px] sm:text-[12px] font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed"
+                >
+                  {r.status === 'pending' ? 'Attribuer l\'IBAN' : 'Déjà traitée'}
+                </button>
               </div>
-            </div>
-          </div>
-          
-          {/* Date de la demande */}
-          <div className="text-[11px] text-slate-400">
-            Demandé le {new Date(r.created_at).toLocaleDateString('fr-FR')} à {new Date(r.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-          </div>
-          
-          {/* Formulaire IBAN/BIC */}
-          <div className="space-y-3 border-t pt-3">
-            <p className="text-[12px] font-medium text-slate-700">Attribuer un IBAN manuellement</p>
-            <div className="space-y-2">
-              <div>
-                <label className="text-[10px] text-slate-500">IBAN (27 caractères)</label>
-                <input 
-                  placeholder="FRXX XXXX XXXX XXXX XXXX XXXX XXX" 
-                  className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
-                  value={ibanForm[r.user_id || r.userId]?.iban || ''}
-                  onChange={(e) => setIbanForm((x) => ({ 
-                    ...x, 
-                    [r.user_id || r.userId]: { 
-                      ...x[r.user_id || r.userId], 
-                      iban: formatIban(e.target.value) 
-                    } 
-                  }))}
-                  maxLength={27}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-500">BIC (optionnel)</label>
-                <input 
-                  placeholder="BNPAFRPPXXX" 
-                  className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
-                  value={ibanForm[r.user_id || r.userId]?.bic || ''}
-                  onChange={(e) => setIbanForm((x) => ({ 
-                    ...x, 
-                    [r.user_id || r.userId]: { 
-                      ...x[r.user_id || r.userId], 
-                      bic: e.target.value.toUpperCase() 
-                    } 
-                  }))}
-                  maxLength={11}
-                />
-              </div>
-            </div>
-          </div>
-          
-          <button 
-            type="button" 
-            onClick={() => assign(r.user_id || r.userId)} 
-            className="w-full py-2.5 bg-teal-700 text-white rounded-xl text-[11px] sm:text-[12px] font-semibold"
-          >
-            Attribuer l'IBAN
-          </button>
-        </div>
-        );
-      })}
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
