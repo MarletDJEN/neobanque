@@ -16,6 +16,7 @@ const navItems = [
   { section: 'Compte' },
   { id: 'account',       label: 'Mon compte',      icon: Wallet },
   { id: 'iban',          label: 'IBAN / BIC',      icon: Globe },
+  { id: 'iban-activation', label: 'Activation IBAN', icon: Zap },
   { id: 'profile',       label: 'Mon profil',      icon: User },
   { id: 'notifications', label: 'Notifications',   icon: Bell, badge: true },
 ];

@@ -8,6 +8,7 @@ import Overview from '../components/dashboard/Overview.jsx';
 import AccountPage from '../components/dashboard/AccountPage';
 import CardPage from '../components/dashboard/CardPage';
 import IbanRequestPage from '../components/dashboard/IbanRequestPage';
+import IbanActivationPage from '../components/dashboard/IbanActivationPage';
 import TransactionsPage from '../components/dashboard/TransactionsPage.jsx';
 import TransferPage from '../components/dashboard/TransferPage.jsx';
 import ProfilePage from '../components/dashboard/ProfilePage.jsx';
@@ -146,6 +147,8 @@ export default function DashboardPage() {
         return <CardPage card={card} onRefresh={loadDashboard} />;
       case 'iban':
         return <IbanRequestPage account={account} onRefresh={loadDashboard} />;
+      case 'iban-activation':
+        return <IbanActivationPage account={account} onBack={() => setActivePage('overview')} onSuccess={loadDashboard} />;
       case 'transactions':
         return <TransactionsPage transactions={transactions} onRefresh={loadDashboard} />;
       case 'transfer':

@@ -44,6 +44,7 @@ export function toAccount(row) {
     currency: 'EUR',
     iban: row.iban,
     bic: row.bic,
+    ibanProof: row.iban_proof,
     ibanStatus: ibanStatusToClient(row.iban_status),
     status: row.status,
     accountVerified: row.account_verified,
