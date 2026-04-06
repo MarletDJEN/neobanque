@@ -52,16 +52,34 @@ export default function DashboardPage() {
 
   // Polling pour vérifier les changements de statut en temps réel
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (account && (account.status === 'pending' || account.ibanStatus === 'pending')) {
-        loadDashboard();
+    // Démarrer le polling seulement après le premier chargement
+    if (!account) return;
+    
+    const interval = setInterval(async () => {
+      try {
+        // Éviter les appels multiples si déjà en cours
+        if (loadDashboardRef.current) return;
+        
+        const { data } = await api.get('/me');
+        const newAccount = data.account;
+        
+        // Recharger seulement si le statut a changé
+        if (newAccount.status !== account.status || newAccount.ibanStatus !== account.ibanStatus) {
+          loadDashboard();
+        }
+      } catch (error) {
+        console.error('Erreur polling:', error);
       }
     }, 5000); // Vérifier toutes les 5 secondes
 
     return () => clearInterval(interval);
-  }, [account, loadDashboard]);
+  }, [account?.id, account?.status, account?.ibanStatus]);
 
   const loadDashboard = useCallback(async () => {
+    // Éviter les appels multiples
+    if (loadDashboardRef.current) return;
+    loadDashboardRef.current = true;
+    
     try {
       const { data } = await api.get('/me');
       const newAccount = data.account;
@@ -111,46 +129,26 @@ export default function DashboardPage() {
       }
       toast.error('Erreur lors du chargement des données');
       console.error('Dashboard load error:', error);
+    } finally {
+      // Réinitialiser la référence à la fin
+      loadDashboardRef.current = false;
     }
   }, [navigate, lastAccountStatus]);
 
-  // Stocker la fonction dans la référence pour éviter les re-renders
-  loadDashboardRef.current = loadDashboard;
-
   useEffect(() => {
-    // Utiliser la référence pour éviter les re-rendres infinis
-    const currentLoad = loadDashboardRef.current;
-    currentLoad();
+    // Charger les données au montage
+    loadDashboard();
     
-    // Polling intelligent : plus rapide pendant le processus d'activation
-    const getPollingInterval = () => {
-      const isActivating = account?.iban && !(account?.status === 'active' && account?.accountVerified);
-      return isActivating ? 3000 : 8000; // 3s si en cours d'activation, 8s sinon
-    };
-    
-    const t = setInterval(() => currentLoad(), getPollingInterval());
-    
-    // Rafraîchir quand la fenêtre redevient visible (quand l'utilisateur revient sur l'onglet)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        currentLoad();
+    // Polling simple uniquement pour les comptes en attente
+    const interval = setInterval(() => {
+      if (account?.status === 'pending' || account?.ibanStatus === 'pending') {
+        loadDashboard();
       }
-    };
+    }, 8000); // Toutes les 8 secondes
     
-    // Rafraîchir quand la fenêtre reprend le focus
-    const handleFocus = () => {
-      currentLoad();
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-    
-    return () => {
-      clearInterval(t);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [account]); // Ajout de account pour recalculer l'intervalle
+    // Nettoyer quand on démonte
+    return () => clearInterval(interval);
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const isPending = userProfile?.accountStatus === 'pending' || account?.status === 'pending';
