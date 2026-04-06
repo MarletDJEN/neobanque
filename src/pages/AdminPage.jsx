@@ -459,18 +459,8 @@ function TabIban({ users, requests, load }) {
     const f = ibanForm[userId] || {};
     if (!f.iban?.trim()) return toast.error('IBAN requis');
     
-    // Validation basique de l'IBAN (format flexible)
+    // Nettoyer l'IBAN (enlever les espaces et mettre en majuscules)
     const cleanIban = f.iban.replace(/\s/g, '').toUpperCase();
-    
-    // Validation minimale : au moins 2 lettres (code pays) + 2 chiffres
-    if (!/^[A-Z]{2}\d{2,}/.test(cleanIban)) {
-      return toast.error('Format IBAN invalide. Exemple: FR7630006000011234567890189');
-    }
-    
-    // Longueur minimale et maximale raisonnables
-    if (cleanIban.length < 8 || cleanIban.length > 34) {
-      return toast.error('IBAN trop court ou trop long (8-34 caractères)');
-    }
     
     try {
       await api.post(`/admin/users/${userId}/iban`, { 
@@ -573,9 +563,9 @@ function TabIban({ users, requests, load }) {
                     <p className="text-[12px] font-medium text-slate-700">Attribuer un IBAN manuellement</p>
                     <div className="space-y-2">
                       <div>
-                        <label className="text-[10px] text-slate-500">IBAN (format libre)</label>
+                        <label className="text-[10px] text-slate-500">IBAN (sans restriction)</label>
                         <input 
-                          placeholder="FR7630006000011234567890189 ou autre format" 
+                          placeholder="N'importe quel format IBAN" 
                           className="w-full px-3 py-2 border rounded-xl text-[11px] sm:text-[12px] font-mono"
                           value={ibanForm[r.user_id || r.userId]?.iban || ''}
                           onChange={(e) => setIbanForm((x) => ({ 
@@ -585,7 +575,6 @@ function TabIban({ users, requests, load }) {
                               iban: formatIban(e.target.value) 
                             } 
                           }))}
-                          maxLength={34}
                         />
                       </div>
                       <div>

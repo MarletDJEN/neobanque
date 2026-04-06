@@ -249,22 +249,8 @@ export async function assignIban(req, res) {
     return res.status(400).json({ error: 'IBAN requis' });
   }
   
-  // Validation basique de l'IBAN (format flexible)
+  // Nettoyer l'IBAN (enlever les espaces et mettre en majuscules)
   const cleanIban = iban.replace(/\s/g, '').toUpperCase();
-  
-  // Validation minimale : au moins 2 lettres (code pays) + 2 chiffres
-  if (!/^[A-Z]{2}\d{2,}/.test(cleanIban)) {
-    return res.status(400).json({ 
-      error: 'Format IBAN invalide. Format attendu: 2 lettres (pays) + chiffres. Exemple: FR7630006000011234567890189' 
-    });
-  }
-  
-  // Longueur minimale et maximale raisonnables
-  if (cleanIban.length < 8 || cleanIban.length > 34) {
-    return res.status(400).json({ 
-      error: 'IBAN trop court ou trop long. Longueur acceptée: 8-34 caractères' 
-    });
-  }
   
   const finalBic = bic?.trim() || 'BNPAFRPPXXX';
   
