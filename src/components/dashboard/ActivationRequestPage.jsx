@@ -8,7 +8,7 @@ const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency:
 export default function ActivationRequestPage({ account, onBack, onSuccess }) {
   // Déterminer l'étape initiale
   const getInitialStep = () => {
-    return account?.iban ? 'proof_submission' : 'iban_request';
+    return account?.iban ? 'transfer_proof' : 'iban_request';
   };
   
   const [currentStep, setCurrentStep] = useState(getInitialStep());
@@ -78,7 +78,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
       } finally {
         setSubmitting(false);
       }
-    } else if (currentStep === 'proof_submission') {
+    } else if (currentStep === 'transfer_proof') {
       // Étape 2 : Envoi de la preuve de virement
       if (!formData.proofFile) {
         toast.error('Veuillez télécharger la preuve de virement');
@@ -88,7 +88,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
       setSubmitting(true);
       try {
         await api.post('/request-account-activation', {
-          step: 'proof_submission',
+          step: 'transfer_proof',
           amount: parseFloat(formData.amount),
           proofUrl: formData.proofUrl
         });
@@ -186,7 +186,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
         </div>
         <div className="w-8 h-0.5 bg-slate-300"></div>
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
-          currentStep === 'proof_submission' ? 'bg-teal-100 text-teal-700' : 'bg-white text-slate-400'
+          currentStep === 'transfer_proof' ? 'bg-teal-100 text-teal-700' : 'bg-white text-slate-400'
         }`}>
           <FileText className="w-4 h-4" />
           <span className="text-[12px] font-medium">Étape 2: Virement</span>
@@ -208,7 +208,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
         </div>
       )}
 
-      {currentStep === 'proof_submission' && (
+      {currentStep === 'transfer_proof' && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
@@ -298,7 +298,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
 
         <button
           type="submit"
-          disabled={submitting || (currentStep === 'proof_submission' && !formData.proofFile)}
+          disabled={submitting || (currentStep === 'transfer_proof' && !formData.proofFile)}
           className="w-full bg-teal-700 text-white rounded-lg py-2.5 text-[12px] font-semibold hover:bg-teal-800 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
         >
           {submitting ? 'Soumission...' : currentStep === 'iban_request' ? 'Demander mon IBAN' : 'Soumettre la preuve de virement'}
