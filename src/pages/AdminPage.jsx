@@ -511,14 +511,14 @@ function TabIban({ users, requests, load }) {
       {/* Debug info */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
         <p className="text-[11px] text-blue-800">
-          <strong>Debug:</strong> {allIbanRequests.length} demande(s) IBAN trouvée(s) au total
+          <strong>Debug:</strong> {ibanRequests.length} demande(s) IBAN trouvée(s) au total
         </p>
         <p className="text-[11px] text-blue-700">
-          {pending.length} en attente, {allIbanRequests.length - pending.length} déjà traitée(s)
+          {pending.length} en attente, {ibanRequests.length - pending.length} déjà traitée(s)
         </p>
       </div>
 
-      {allIbanRequests.length === 0 ? (
+      {ibanRequests.length === 0 ? (
         <p className="text-slate-500 text-[13px]">Aucune demande d'IBAN trouvée.</p>
       ) : (
         <>
@@ -528,7 +528,7 @@ function TabIban({ users, requests, load }) {
             <p className="text-teal-600 text-[13px] mb-4">{pending.length} demande(s) d'IBAN en attente:</p>
           )}
           
-          {allIbanRequests.map((r) => {
+          {ibanRequests.map((r) => {
             const userInfo = getUserInfo(r.user_id || r.userId);
             return (
               <div key={r.id} className="bg-white border rounded-2xl p-3 sm:p-4 space-y-3">
