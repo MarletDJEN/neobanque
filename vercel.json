@@ -11,18 +11,18 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/server/index.js"
+      "source": "/api/(.*)",
+      "destination": "/server/index.js"
     },
     {
-      "src": "/health",
-      "dest": "/server/index.js"
+      "source": "/health",
+      "destination": "/server/index.js"
     },
     {
-      "src": "/(.*)",
-      "dest": "/dist/$1"
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
