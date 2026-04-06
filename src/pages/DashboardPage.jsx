@@ -11,7 +11,6 @@ import IbanRequestPage from '../components/dashboard/IbanRequestPage';
 import TransactionsPage from '../components/dashboard/TransactionsPage.jsx';
 import TransferPage from '../components/dashboard/TransferPage.jsx';
 import ProfilePage from '../components/dashboard/ProfilePage.jsx';
-import ActivationRequestPage from '../components/dashboard/ActivationRequestPage.jsx';
 import NotificationsPanel from '../components/dashboard/NotificationsPanel';
 import { Clock, Menu, Ban, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -179,8 +178,6 @@ export default function DashboardPage() {
         return <TransferPage account={account} onSuccess={loadDashboard} />;
       case 'profile':
         return <ProfilePage onSaved={loadDashboard} />;
-      case 'activation':
-        return <ActivationRequestPage account={account} onBack={() => setActivePage('overview')} onSuccess={loadDashboard} />;
       case 'notifications':
         return (
           <NotificationsPanel
