@@ -1,9 +1,5 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/server/index.js" },
-    { "source": "/health", "destination": "/server/index.js" }
-  ],
   "builds": [
     {
       "src": "package.json",
@@ -13,6 +9,16 @@
     {
       "src": "server/index.js",
       "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/server/index.js"
+    },
+    {
+      "src": "/health",
+      "dest": "/server/index.js"
     }
   ]
 }
