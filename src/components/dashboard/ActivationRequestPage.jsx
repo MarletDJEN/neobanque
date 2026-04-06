@@ -31,10 +31,14 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
     
     setUploading(true);
     try {
-      // Simuler l'upload - en production, utiliser un vrai service d'upload
-      const fakeUrl = URL.createObjectURL(file);
-      setFormData(prev => ({ ...prev, proofFile: file, proofUrl: fakeUrl }));
-      toast.success('Image téléchargée avec succès');
+      // Convertir le fichier en base64 pour l'envoi au backend
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64Url = event.target.result;
+        setFormData(prev => ({ ...prev, proofFile: file, proofUrl: base64Url }));
+        toast.success('Image téléchargée avec succès');
+      };
+      reader.readAsDataURL(file);
     } catch (err) {
       toast.error('Erreur lors du téléchargement de l\'image');
       console.error(err);

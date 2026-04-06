@@ -90,7 +90,7 @@ CREATE TABLE account_activation_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
-  proof_url TEXT,
+  proof_url TEXT, -- Augmenté pour supporter les images base64
   step TEXT NOT NULL DEFAULT 'iban_request' CHECK (step IN ('iban_request', 'transfer_proof')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
   reject_reason TEXT,

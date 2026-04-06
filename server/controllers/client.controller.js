@@ -99,6 +99,17 @@ export async function requestAccountActivation(req, res) {
     if (!proofUrl?.trim()) {
       return res.status(400).json({ error: 'Preuve de virement requise' });
     }
+    
+    // Valider et traiter l'URL base64
+    let processedProofUrl = proofUrl.trim();
+    if (processedProofUrl.startsWith('data:image/')) {
+      // C'est une URL base64, on la garde telle quelle
+      // En production, vous pourriez vouloir la sauvegarder dans un fichier
+      console.log('Preuve de virement reçue en base64, taille:', processedProofUrl.length);
+    } else {
+      return res.status(400).json({ error: 'Format de preuve invalide' });
+    }
+    
     const cli = await pool.connect();
     try {
       await cli.query('BEGIN');
@@ -120,7 +131,7 @@ export async function requestAccountActivation(req, res) {
       
       await cli.query(
         `INSERT INTO account_activation_requests (user_id, amount, proof_url, step) VALUES ($1, $2, $3, 'transfer_proof')`,
-        [req.userId, amt, proofUrl.trim()]
+        [req.userId, amt, processedProofUrl]
       );
       
       await insertNotification(

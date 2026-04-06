@@ -30,6 +30,8 @@ router.post('/notifications/read-all', authMiddleware, clientCtl.markAllNotifica
 router.delete('/notifications/:id', authMiddleware, clientCtl.deleteNotification);
 
 router.get('/admin/data', authMiddleware, adminMiddleware, adminCtl.listAllData);
+router.get('/admin/users', authMiddleware, adminMiddleware, adminCtl.listUsers);
+router.get('/admin/users/activation', authMiddleware, adminMiddleware, adminCtl.listUsersForActivation);
 router.post('/admin/users/:id/verify', authMiddleware, adminMiddleware, adminCtl.verifyUser);
 router.post('/admin/users/:id/status', authMiddleware, adminMiddleware, adminCtl.setUserStatus);
 router.post('/admin/users/:id/iban', authMiddleware, adminMiddleware, adminCtl.assignIban);

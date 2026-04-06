@@ -511,8 +511,28 @@ function TabIban({ users, requests, load }) {
 }
 
 function TabActivation({ users, requests, load }) {
-  const pending = requests.filter((r) => r.step === 'transfer_proof' && r.status === 'pending');
+  const [activationUsers, setActivationUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [batchForm, setBatchForm] = useState({ generateIban: false, initialBalance: '' });
   const [rejectionReasons, setRejectionReasons] = useState({});
+  const pending = requests.filter((r) => r.step === 'transfer_proof' && r.status === 'pending');
+
+  // Charger les utilisateurs qui peuvent être activés directement
+  useEffect(() => {
+    const loadUsersForActivation = async () => {
+      try {
+        setLoadingUsers(true);
+        const { data } = await api.get('/admin/users/activation');
+        setActivationUsers(data.users || []);
+      } catch (e) {
+        console.error('Erreur chargement utilisateurs pour activation:', e);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    loadUsersForActivation();
+  }, [load]);
 
   const getUserInfo = (userId) => {
     return users.find(u => u.id === userId);
@@ -546,101 +566,211 @@ function TabActivation({ users, requests, load }) {
     }
   };
 
+  const directActivate = async (userId) => {
+    try {
+      await api.post(`/admin/users/${userId}/verify`, batchForm);
+      toast.success('Compte activé directement !');
+      setSelectedUsers(prev => prev.filter(id => id !== userId));
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erreur lors de l\'activation');
+    }
+  };
+
+  const batchActivate = async () => {
+    if (selectedUsers.length === 0) return toast.error('Sélectionnez des comptes à activer');
+    
+    try {
+      for (const userId of selectedUsers) {
+        await api.post(`/admin/users/${userId}/verify`, batchForm);
+      }
+      toast.success(`${selectedUsers.length} compte(s) activé(s) !`);
+      setSelectedUsers([]);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erreur lors de l\'activation');
+    }
+  };
+
+  const toggleUserSelection = (userId) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <h1 className="text-[18px] font-semibold">Activation Comptes</h1>
-      {pending.length === 0 && <p className="text-slate-500 text-[13px]">Aucune demande d'activation en attente.</p>}
       
-      {pending.map((r) => {
-        const userInfo = getUserInfo(r.user_id || r.userId);
-        return (
-        <div key={r.id} className="bg-white border rounded-2xl p-3 sm:p-4 space-y-3">
-          {/* Informations du client */}
-          <div className="flex items-start gap-3">
-            <Avatar name={userInfo?.displayName || userInfo?.email || 'Client'} size="lg" />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-[12px] sm:text-[13px]">{userInfo?.displayName || 'Client'}</p>
-              <p className="text-[11px] sm:text-[12px] text-slate-500">{userInfo?.email}</p>
-              <div className="flex flex-wrap gap-2 mt-1">
-                <Chip color={userInfo?.accountStatus === 'active' ? 'green' : userInfo?.accountStatus === 'suspended' ? 'red' : 'amber'}>
-                  {userInfo?.accountStatus || 'pending'}
-                </Chip>
-                <Chip color="blue">
-                  {userInfo?.kycStatus || 'unknown'}
-                </Chip>
-              </div>
-            </div>
-          </div>
-          
-          {/* Détails de la demande */}
-          <div className="bg-slate-50 rounded-xl p-3 space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-[11px] text-slate-600">Montant du virement :</span>
-              <span className="font-mono text-[12px] font-semibold text-teal-700">{fmt(r.amount)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[11px] text-slate-600">Demandé le :</span>
-              <span className="text-[11px] text-slate-500">
-                {new Date(r.created_at).toLocaleDateString('fr-FR')} à {new Date(r.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-          </div>
-          
-          {/* Preuve de virement */}
-          {r.proof_url && (
-            <div>
-              <p className="text-[11px] text-slate-600 mb-2">Preuve de virement :</p>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <img 
-                  src={r.proof_url} 
-                  alt="Preuve de virement" 
-                  className="w-full h-auto max-h-64 object-contain bg-white"
-                />
-              </div>
-              <a 
-                href={r.proof_url} 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-[11px] text-teal-600 underline mt-2 inline-block"
-              >
-                Ouvrir dans un nouvel onglet
-              </a>
-            </div>
-          )}
-          
-          {/* Motif de rejet */}
-          <div>
-            <textarea
-              value={rejectionReasons[r.id] || ''}
-              onChange={(e) => setRejectionReasons(prev => ({ ...prev, [r.id]: e.target.value }))}
-              placeholder="Motif de rejet (si applicable)"
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[11px] sm:text-[12px]"
-              rows={2}
+      {/* Activation directe des comptes */}
+      <div className="bg-white border border-slate-100 rounded-2xl p-4 space-y-4">
+        <h2 className="text-[14px] font-medium text-slate-700">Activation directe (sans demande client)</h2>
+        
+        {/* Contrôles pour l'activation en lot */}
+        <div className="flex flex-col sm:flex-row gap-3 p-3 bg-slate-50 rounded-xl">
+          <label className="flex items-center gap-2 text-[12px]">
+            <input 
+              type="checkbox" 
+              checked={batchForm.generateIban}
+              onChange={(e) => setBatchForm(prev => ({ ...prev, generateIban: e.target.checked }))}
+              className="rounded"
             />
-          </div>
-          
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              type="button"
-              onClick={() => approveActivation(r.user_id || r.userId, r.id)}
-              className="flex-1 py-2.5 bg-teal-700 text-white rounded-xl text-[11px] sm:text-[12px] font-semibold flex items-center justify-center gap-1"
+            Générer IBAN automatiquement
+          </label>
+          <input 
+            type="number" 
+            placeholder="Solde initial (€)" 
+            value={batchForm.initialBalance}
+            onChange={(e) => setBatchForm(prev => ({ ...prev, initialBalance: e.target.value }))}
+            className="px-3 py-1.5 border rounded-lg text-[12px] w-32"
+          />
+          {selectedUsers.length > 0 && (
+            <button 
+              onClick={batchActivate}
+              className="px-4 py-1.5 bg-teal-700 text-white rounded-lg text-[12px] font-medium"
             >
-              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
-              Approuver et Activer
+              Activer ({selectedUsers.length})
             </button>
-            <button
-              type="button"
-              onClick={() => rejectActivation(r.id)}
-              className="flex-1 py-2 bg-red-50 text-red-700 rounded-xl text-[11px] sm:text-[12px] border border-red-200 flex items-center justify-center gap-1"
-            >
-              <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
-              Rejeter
-            </button>
-          </div>
+          )}
         </div>
-        );
-      })}
+
+        {loadingUsers ? (
+          <p className="text-slate-500 text-[13px]">Chargement...</p>
+        ) : activationUsers.length === 0 ? (
+          <p className="text-slate-500 text-[13px]">Aucun compte en attente d'activation.</p>
+        ) : (
+          <div className="space-y-2">
+            {activationUsers.map((user) => (
+              <div key={user.id} className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl">
+                <input 
+                  type="checkbox"
+                  checked={selectedUsers.includes(user.id)}
+                  onChange={() => toggleUserSelection(user.id)}
+                  className="rounded"
+                />
+                <Avatar name={user.displayName || user.email} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium truncate">{user.displayName}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+                  <div className="flex gap-2 mt-1">
+                    <Chip color={user.accountStatus === 'pending' ? 'amber' : 'red'}>
+                      {user.accountStatus}
+                    </Chip>
+                    <Chip color="blue">
+                      KYC: {user.kycStatus === 'approved' ? '✅' : '⏳'}
+                    </Chip>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => directActivate(user.id)}
+                  className="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-[11px] font-medium"
+                >
+                  Activer
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Demandes d'activation existantes */}
+      <div className="bg-white border border-slate-100 rounded-2xl p-4 space-y-4">
+        <h2 className="text-[14px] font-medium text-slate-700">Demandes client en attente</h2>
+        {pending.length === 0 && <p className="text-slate-500 text-[13px]">Aucune demande d'activation en attente.</p>}
+        
+        {pending.map((r) => {
+          const userInfo = getUserInfo(r.user_id || r.userId);
+          return (
+          <div key={r.id} className="border border-slate-200 rounded-xl p-4 space-y-3">
+            {/* Informations du client */}
+            <div className="flex items-start gap-3">
+              <Avatar name={userInfo?.displayName || userInfo?.email || 'Client'} size="lg" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-[12px] sm:text-[13px]">{userInfo?.displayName || 'Client'}</p>
+                <p className="text-[11px] sm:text-[12px] text-slate-500">{userInfo?.email}</p>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <Chip color={userInfo?.accountStatus === 'active' ? 'green' : userInfo?.accountStatus === 'suspended' ? 'red' : 'amber'}>
+                    {userInfo?.accountStatus || 'pending'}
+                  </Chip>
+                  <Chip color="blue">
+                    {userInfo?.kycStatus || 'unknown'}
+                  </Chip>
+                </div>
+              </div>
+            </div>
+            
+            {/* Détails de la demande */}
+            <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] text-slate-600">Montant du virement :</span>
+                <span className="font-mono text-[12px] font-semibold text-teal-700">{fmt(r.amount)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] text-slate-600">Demandé le :</span>
+                <span className="text-[11px] text-slate-500">
+                  {new Date(r.created_at).toLocaleDateString('fr-FR')} à {new Date(r.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </div>
+            
+            {/* Preuve de virement */}
+            {r.proof_url && (
+              <div>
+                <p className="text-[11px] text-slate-600 mb-2">Preuve de virement :</p>
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <img 
+                    src={r.proof_url} 
+                    alt="Preuve de virement" 
+                    className="w-full h-auto max-h-64 object-contain bg-white"
+                  />
+                </div>
+                <a 
+                  href={r.proof_url} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="text-[11px] text-teal-600 underline mt-2 inline-block"
+                >
+                  Ouvrir dans un nouvel onglet
+                </a>
+              </div>
+            )}
+            
+            {/* Motif de rejet */}
+            <div>
+              <textarea
+                value={rejectionReasons[r.id] || ''}
+                onChange={(e) => setRejectionReasons(prev => ({ ...prev, [r.id]: e.target.value }))}
+                placeholder="Motif de rejet (si applicable)"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[11px] sm:text-[12px]"
+                rows={2}
+              />
+            </div>
+            
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => approveActivation(r.user_id || r.userId, r.id)}
+                className="flex-1 py-2.5 bg-teal-700 text-white rounded-xl text-[11px] sm:text-[12px] font-semibold flex items-center justify-center gap-1"
+              >
+                <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
+                Approuver et Activer
+              </button>
+              <button
+                type="button"
+                onClick={() => rejectActivation(r.id)}
+                className="flex-1 py-2 bg-red-50 text-red-700 rounded-xl text-[11px] sm:text-[12px] border border-red-200 flex items-center justify-center gap-1"
+              >
+                <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
+                Rejeter
+              </button>
+            </div>
+          </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

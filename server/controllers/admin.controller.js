@@ -29,8 +29,36 @@ function mapUserAdminRow(row) {
 
 export async function listUsers(req, res) {
   try {
+    const { status, kyc_status } = req.query;
+    let query = `SELECT * FROM users WHERE role = 'client'`;
+    const params = [];
+    
+    if (status) {
+      params.push(status);
+      query += ` AND status = $${params.length}`;
+    }
+    
+    if (kyc_status) {
+      params.push(kyc_status);
+      query += ` AND kyc_status = $${params.length}`;
+    }
+    
+    query += ` ORDER BY created_at DESC`;
+    
+    const r = await pool.query(query, params);
+    res.json({ users: r.rows.map(mapUserAdminRow) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+export async function listUsersForActivation(req, res) {
+  try {
     const r = await pool.query(
-      `SELECT * FROM users WHERE role = 'client' ORDER BY created_at DESC`
+      `SELECT * FROM users 
+       WHERE role = 'client' AND (status = 'pending' OR status = 'suspended')
+       ORDER BY created_at DESC`
     );
     res.json({ users: r.rows.map(mapUserAdminRow) });
   } catch (e) {
@@ -80,22 +108,60 @@ export async function listAllData(req, res) {
 
 export async function verifyUser(req, res) {
   const { id } = req.params;
+  const { generateIban, initialBalance } = req.body;
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
+    
+    // Vérifier si l'utilisateur existe
+    const userCheck = await cli.query(`SELECT * FROM users WHERE id = $1 AND role = 'client'`, [id]);
+    if (userCheck.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Utilisateur introuvable' });
+    }
+    
+    // Activer le compte
     await cli.query(
-      `UPDATE users SET account_verified = true, status = 'active' WHERE id = $1 AND role = 'client'`,
+      `UPDATE users SET account_verified = true, status = 'active' WHERE id = $1`,
       [id]
     );
+    
+    // Générer un IBAN si demandé
+    let iban = null;
+    let bic = null;
+    if (generateIban) {
+      iban = generateIban();
+      bic = 'BNPAFRPPXXX';
+      await cli.query(
+        `UPDATE users SET iban = $1, bic = $2, iban_status = 'assigned' WHERE id = $3`,
+        [iban, bic, id]
+      );
+    }
+    
+    // Ajouter un solde initial si spécifié
+    if (initialBalance && Number(initialBalance) > 0) {
+      await cli.query(`UPDATE users SET balance = balance + $1 WHERE id = $2`, [Number(initialBalance), id]);
+      await cli.query(
+        `INSERT INTO transactions (user_id, type, amount, label) VALUES ($1, 'deposit', $2, $3)`,
+        [id, Number(initialBalance), 'Crédit initial (activation admin)']
+      );
+    }
+    
     await insertNotification(
       cli,
       id,
       'Compte activé !',
-      'Votre compte NeoBank a été validé. Vous pouvez utiliser les services.'
+      `Votre compte NeoBank a été validé par l'administrateur. Vous pouvez utiliser les services.${generateIban ? ` IBAN: ${iban.slice(0, 8)}…` : ''}${initialBalance ? ` Crédit initial: ${initialBalance}€` : ''}`
     );
+    
     await cli.query('COMMIT');
     const u = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    res.json({ user: mapUserAdminRow(u.rows[0]) });
+    res.json({ 
+      user: mapUserAdminRow(u.rows[0]),
+      account: toAccount(u.rows[0]),
+      iban,
+      bic
+    });
   } catch (e) {
     await cli.query('ROLLBACK');
     console.error(e);
@@ -103,6 +169,15 @@ export async function verifyUser(req, res) {
   } finally {
     cli.release();
   }
+}
+
+function generateIban() {
+  const countryCode = 'FR';
+  const checkDigits = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+  const bankCode = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+  const accountNumber = Math.floor(Math.random() * 10000000000).toString().padStart(11, '0');
+  const nationalCheck = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+  return `${countryCode}${checkDigits}${bankCode}${accountNumber}${nationalCheck}`;
 }
 
 export async function setUserStatus(req, res) {
