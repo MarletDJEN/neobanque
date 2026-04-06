@@ -42,44 +42,12 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lastAccountStatus, setLastAccountStatus] = useState(null);
-  
-  // Référence pour éviter les re-renders infinis
-  const loadDashboardRef = useRef(null);
 
   useEffect(() => {
     if (userProfile?.role === 'admin') navigate('/admin', { replace: true });
   }, [userProfile, navigate]);
 
-  // Polling pour vérifier les changements de statut en temps réel
-  useEffect(() => {
-    // Démarrer le polling seulement après le premier chargement
-    if (!account) return;
-    
-    const interval = setInterval(async () => {
-      try {
-        // Éviter les appels multiples si déjà en cours
-        if (loadDashboardRef.current) return;
-        
-        const { data } = await api.get('/me');
-        const newAccount = data.account;
-        
-        // Recharger seulement si le statut a changé
-        if (newAccount.status !== account.status || newAccount.ibanStatus !== account.ibanStatus) {
-          loadDashboard();
-        }
-      } catch (error) {
-        console.error('Erreur polling:', error);
-      }
-    }, 5000); // Vérifier toutes les 5 secondes
-
-    return () => clearInterval(interval);
-  }, [account?.id, account?.status, account?.ibanStatus]);
-
   const loadDashboard = useCallback(async () => {
-    // Éviter les appels multiples
-    if (loadDashboardRef.current) return;
-    loadDashboardRef.current = true;
-    
     try {
       const { data } = await api.get('/me');
       const newAccount = data.account;
@@ -129,9 +97,6 @@ export default function DashboardPage() {
       }
       toast.error('Erreur lors du chargement des données');
       console.error('Dashboard load error:', error);
-    } finally {
-      // Réinitialiser la référence à la fin
-      loadDashboardRef.current = false;
     }
   }, [navigate, lastAccountStatus]);
 
