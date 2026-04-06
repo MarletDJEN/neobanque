@@ -221,7 +221,7 @@ function TabClients({ users, accounts, load }) {
   const acc = (id) => accounts.find((a) => a.id === id);
   const verify = async (id) => {
     await api.post(`/admin/users/${id}/verify`);
-    toast.success('Compte validé');
+    toast.success('✅ Compte client validé avec succès !');
     load();
   };
   const suspend = async (id) => {

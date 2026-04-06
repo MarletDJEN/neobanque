@@ -124,12 +124,14 @@ export async function listAllData(req, res) {
 export async function verifyUser(req, res) {
   const { id } = req.params;
   const { generateIban, initialBalance } = req.body;
+  console.log('DEBUG verifyUser:', { id, generateIban, initialBalance });
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
     
     // Vérifier si l'utilisateur existe
     const userCheck = await cli.query(`SELECT * FROM users WHERE id = $1 AND role = 'client'`, [id]);
+    console.log('DEBUG user avant:', userCheck.rows[0]);
     if (userCheck.rowCount === 0) {
       await cli.query('ROLLBACK');
       return res.status(404).json({ error: 'Utilisateur introuvable' });
@@ -140,6 +142,10 @@ export async function verifyUser(req, res) {
       `UPDATE users SET account_verified = true, status = 'active' WHERE id = $1`,
       [id]
     );
+    
+    // Vérifier après mise à jour
+    const userAfter = await cli.query(`SELECT * FROM users WHERE id = $1`, [id]);
+    console.log('DEBUG user après:', userAfter.rows[0]);
     
     // Générer un IBAN si demandé
     let iban = null;
