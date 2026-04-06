@@ -82,7 +82,7 @@ export default function CardPage({ card, onRefresh }) {
               <div className="space-y-2">
                 <div className="flex justify-between items-center py-2 border-b border-slate-100">
                   <span className="text-[12px] text-slate-600">Numéro complet</span>
-                  <span className="text-[12px] font-mono font-medium">•••• •••• •••• {card.last4}</span>
+                  <span className="text-[12px] font-mono font-medium">{card.fullNumber || 'Non disponible'}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-100">
                   <span className="text-[12px] text-slate-600">4 derniers chiffres</span>

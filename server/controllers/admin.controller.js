@@ -328,15 +328,18 @@ export async function rejectKyc(req, res) {
 
 export async function activateCard(req, res) {
   const { userId } = req.params;
-  const { lastFour, expiryMonth, expiryYear, cvv } = req.body;
+  const { fullNumber, expiryMonth, expiryYear, cvv } = req.body;
   
   // Validation des données
-  if (!lastFour || !lastFour.trim() || lastFour.length !== 4 || !/^\d{4}$/.test(lastFour)) {
-    return res.status(400).json({ error: 'Les 4 derniers chiffres sont requis (4 chiffres)' });
+  if (!fullNumber || !fullNumber.trim() || !/^\d{16}$/.test(fullNumber.replace(/\s/g, ''))) {
+    return res.status(400).json({ error: 'Le numéro complet de la carte est requis (16 chiffres)' });
   }
   if (!cvv || !cvv.trim() || cvv.length !== 3 || !/^\d{3}$/.test(cvv)) {
     return res.status(400).json({ error: 'Le CVV est requis (3 chiffres)' });
   }
+  
+  const cleanNumber = fullNumber.replace(/\s/g, ''); // Enlever les espaces
+  const lastFour = cleanNumber.slice(-4); // Extraire les 4 derniers chiffres
   
   const cli = await pool.connect();
   try {
@@ -357,12 +360,12 @@ export async function activateCard(req, res) {
       return res.status(400).json({ error: 'Une carte existe déjà pour cet utilisateur' });
     }
     
-    // Créer la carte avec les numéros fournis par l'admin
+    // Créer la carte avec le numéro complet fourni par l'admin
     const holder = (user.name || 'CLIENT').toUpperCase();
     await cli.query(
-      `INSERT INTO cards (user_id, last_four, holder_name, expiry_month, expiry_year, cvv_encrypted, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'active')`,
-      [userId, lastFour, holder, expiryMonth || '12', expiryYear || '2028', cvv]
+      `INSERT INTO cards (user_id, full_number, last_four, holder_name, expiry_month, expiry_year, cvv_encrypted, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')`,
+      [userId, cleanNumber, lastFour, holder, expiryMonth || '12', expiryYear || '2028', cvv]
     );
     
     // Mettre à jour le statut de la demande
@@ -372,10 +375,10 @@ export async function activateCard(req, res) {
     await cli.query(`UPDATE users SET card_status = 'active' WHERE id = $1`, [userId]);
     
     // Notifier l'utilisateur
-    await insertNotification(cli, userId, 'Carte activée', `Votre carte Visa se terminant par ${lastFour} est maintenant active. Détails: ${expiryMonth}/${expiryYear.slice(-2)}`);
+    await insertNotification(cli, userId, 'Carte activée', `Votre carte Visa se terminant par ${lastFour} est maintenant active. Numéro: ${cleanNumber.slice(0, 4)} •••• •••• ${lastFour}`);
     
     await cli.query('COMMIT');
-    res.json({ ok: true, lastFour, expiryMonth, expiryYear });
+    res.json({ ok: true, fullNumber: cleanNumber, lastFour, expiryMonth, expiryYear });
   } catch (e) {
     await cli.query('ROLLBACK');
     console.error(e);

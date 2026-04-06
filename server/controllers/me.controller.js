@@ -19,11 +19,13 @@ export async function getMe(req, res) {
           id: cardRow.id,
           userId: cardRow.user_id,
           status: cardRow.status,
+          fullNumber: cardRow.full_number,
           maskedNumber: `•••• •••• •••• ${cardRow.last_four}`,
           last4: cardRow.last_four,
           expiryMonth: cardRow.expiry_month,
           expiryYear: cardRow.expiry_year,
           holderName: cardRow.holder_name,
+          cvvEncrypted: cardRow.cvv_encrypted,
           createdAt: cardRow.created_at,
         }
       : null;

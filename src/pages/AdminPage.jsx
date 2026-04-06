@@ -791,7 +791,7 @@ function TabCards({ cards, cardRequests, users, load }) {
     try {
       // Activer la carte avec les informations fournies
       await api.post(`/admin/users/${userId}/card/activate`, {
-        lastFour: form.lastFour?.trim(),
+        fullNumber: form.fullNumber?.replace(/\s/g, ''), // Enlever les espaces
         expiryMonth: form.expiryMonth || '12',
         expiryYear: form.expiryYear || '2028',
         cvv: form.cvv?.trim()
@@ -859,68 +859,70 @@ function TabCards({ cards, cardRequests, users, load }) {
             {/* Formulaire d'activation */}
             <div className="space-y-3 border-t pt-3">
               <p className="text-[12px] font-medium text-slate-700">Détails de la carte à activer :</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
                 <div>
-                  <label className="text-[10px] text-slate-500">4 derniers chiffres</label>
+                  <label className="text-[10px] text-slate-500">Numéro complet (16 chiffres)</label>
                   <input
                     type="text"
-                    maxLength={4}
+                    maxLength={19}
                     className="w-full px-2 py-1.5 border rounded-lg text-[11px] font-mono"
-                    value={cardForms[c.id]?.lastFour || ''}
+                    value={cardForms[c.id]?.fullNumber || ''}
                     onChange={(e) => setCardForms(prev => ({ 
                       ...prev, 
-                      [c.id]: { ...prev[c.id], lastFour: e.target.value.replace(/\D/g, '') }
+                      [c.id]: { ...prev[c.id], fullNumber: e.target.value.replace(/\s/g, '').replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim() }
                     }))}
-                    placeholder="1234"
+                    placeholder="1234 5678 9012 3456"
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] text-slate-500">CVV</label>
-                  <input
-                    type="text"
-                    maxLength={3}
-                    className="w-full px-2 py-1.5 border rounded-lg text-[11px] font-mono"
-                    value={cardForms[c.id]?.cvv || ''}
-                    onChange={(e) => setCardForms(prev => ({ 
-                      ...prev, 
-                      [c.id]: { ...prev[c.id], cvv: e.target.value.replace(/\D/g, '') }
-                    }))}
-                    placeholder="123"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500">Mois</label>
-                  <select
-                    className="w-full px-2 py-1.5 border rounded-lg text-[11px]"
-                    value={cardForms[c.id]?.expiryMonth || '12'}
-                    onChange={(e) => setCardForms(prev => ({ 
-                      ...prev, 
-                      [c.id]: { ...prev[c.id], expiryMonth: e.target.value }
-                    }))}
-                  >
-                    {Array.from({length: 12}, (_, i) => (
-                      <option key={i+1} value={String(i+1).padStart(2, '0')}>
-                        {String(i+1).padStart(2, '0')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500">Année</label>
-                  <select
-                    className="w-full px-2 py-1.5 border rounded-lg text-[11px]"
-                    value={cardForms[c.id]?.expiryYear || '2028'}
-                    onChange={(e) => setCardForms(prev => ({ 
-                      ...prev, 
-                      [c.id]: { ...prev[c.id], expiryYear: e.target.value }
-                    }))}
-                  >
-                    {Array.from({length: 10}, (_, i) => (
-                      <option key={i} value={2026 + i}>
-                        {2026 + i}
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-500">CVV</label>
+                    <input
+                      type="text"
+                      maxLength={3}
+                      className="w-full px-2 py-1.5 border rounded-lg text-[11px] font-mono"
+                      value={cardForms[c.id]?.cvv || ''}
+                      onChange={(e) => setCardForms(prev => ({ 
+                        ...prev, 
+                        [c.id]: { ...prev[c.id], cvv: e.target.value.replace(/\D/g, '') }
+                      }))}
+                      placeholder="123"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500">Mois</label>
+                    <select
+                      className="w-full px-2 py-1.5 border rounded-lg text-[11px]"
+                      value={cardForms[c.id]?.expiryMonth || '12'}
+                      onChange={(e) => setCardForms(prev => ({ 
+                        ...prev, 
+                        [c.id]: { ...prev[c.id], expiryMonth: e.target.value }
+                      }))}
+                    >
+                      {Array.from({length: 12}, (_, i) => (
+                        <option key={i+1} value={String(i+1).padStart(2, '0')}>
+                          {String(i+1).padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500">Année</label>
+                    <select
+                      className="w-full px-2 py-1.5 border rounded-lg text-[11px]"
+                      value={cardForms[c.id]?.expiryYear || '2028'}
+                      onChange={(e) => setCardForms(prev => ({ 
+                        ...prev, 
+                        [c.id]: { ...prev[c.id], expiryYear: e.target.value }
+                      }))}
+                    >
+                      {Array.from({length: 10}, (_, i) => (
+                        <option key={i} value={2026 + i}>
+                          {2026 + i}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
