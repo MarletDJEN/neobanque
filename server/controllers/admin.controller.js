@@ -166,7 +166,7 @@ export async function verifyUser(req, res) {
       cli,
       id,
       'Compte activé !',
-      `Votre compte NeoBank a été validé par l'administrateur. Vous pouvez utiliser les services.${generateIban ? ` IBAN: ${iban.slice(0, 8)}…` : ''}${initialBalance ? ` Crédit initial: ${initialBalance}€` : ''}`
+      `Votre compte NeoBank a été validé par l'administrateur. Vous pouvez utiliser les services.${generateIban ? ` Votre IBAN : ${iban.slice(0, 8)}…` : ''}${initialBalance ? ` Crédit initial : ${initialBalance}€` : ''}`
     );
     
     await cli.query('COMMIT');
@@ -267,7 +267,7 @@ export async function assignIban(req, res) {
       cli,
       id,
       'IBAN attribué',
-      `Votre IBAN ${cleanIban.slice(0, 8)}… est actif. Vous pouvez maintenant effectuer le virement de 500€.`
+      `Votre IBAN ${cleanIban.slice(0, 8)}… est actif. Vous pouvez maintenant effectuer le virement de 500 €.`
     );
     
     await cli.query('COMMIT');

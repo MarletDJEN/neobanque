@@ -177,7 +177,7 @@ export async function approveActivationRequest(req, res) {
       await cli.query(`UPDATE users SET iban = $1, bic = $2, iban_status = 'assigned' WHERE id = $3`, [cleanIban, finalBic, request.user_id]);
       await cli.query(`UPDATE account_activation_requests SET status = 'approved', reviewed_at = now() WHERE id = $1`, [id]);
       await insertNotification(cli, request.user_id, 'IBAN attribué !',
-        `Votre IBAN a été attribué : ${cleanIban.slice(0, 8)}… Vous pouvez maintenant effectuer le virement de 500€.`);
+        `Votre IBAN a été attribué : ${cleanIban.slice(0, 8)}… Vous pouvez maintenant effectuer le virement de 500 €.`);
       await cli.query('COMMIT');
       res.json({ ok: true, iban: cleanIban, bic: finalBic });
     } else if (request.step === 'transfer_proof') {
