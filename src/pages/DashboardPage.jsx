@@ -168,7 +168,7 @@ export default function DashboardPage() {
         </aside>
       </div>
 
-      <main className={`flex-1 flex flex-col min-w-0 overflow-y-auto overscroll-y-contain transition-[margin] duration-300 ml-0 ${mainMarginClass} pb-[4.75rem] md:pb-0`}>
+      <main className={`flex-1 flex flex-col min-w-0 overflow-y-auto overscroll-y-contain transition-[margin] duration-300 ml-0 ${mainMarginClass} pb-[4.75rem] md:pb-0 h-full`}>
         <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-white/90 backdrop-blur-md border-b border-slate-100/90 shadow-sm">
           <button
             type="button"

@@ -100,13 +100,13 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+    <div className="h-[100dvh] min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 overflow-hidden">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-teal-700/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-900/20 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-sm">
+      <div className="relative w-full max-w-sm flex flex-col justify-center min-h-0">
         <div className="text-center mb-7">
           <div className="inline-flex items-center gap-2.5 mb-2">
             <div className="w-10 h-10 bg-teal-700 rounded-xl flex items-center justify-center shadow-lg shadow-teal-900/50">
