@@ -46,6 +46,7 @@ export function toAccount(row) {
     bic: row.bic,
     ibanStatus: ibanStatusToClient(row.iban_status),
     status: row.status,
+    accountVerified: row.account_verified,
   };
 }
 
