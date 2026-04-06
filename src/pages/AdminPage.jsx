@@ -447,6 +447,10 @@ function TabIban({ users, requests, load }) {
   const pending = requests.filter((r) => (r.type === 'iban_request' || r.step === 'iban_request') && r.status === 'pending');
   const [ibanForm, setIbanForm] = useState({});
 
+  // Debug pour voir les demandes
+  console.log('Toutes les requests:', requests);
+  console.log('Demandes IBAN filtrées:', pending);
+
   const assign = async (userId) => {
     const f = ibanForm[userId] || {};
     if (!f.iban?.trim()) return toast.error('IBAN requis');
@@ -572,6 +576,9 @@ function TabActivation({ users, requests, load }) {
   const [batchForm, setBatchForm] = useState({ generateIban: false, initialBalance: '' });
   const [rejectionReasons, setRejectionReasons] = useState({});
   const pending = requests.filter((r) => r.step === 'transfer_proof' && r.status === 'pending');
+
+  // Debug pour voir les demandes de preuve de virement
+  console.log('Demandes transfer_proof filtrées:', pending);
 
   // Charger les utilisateurs qui peuvent être activés directement
   useEffect(() => {
