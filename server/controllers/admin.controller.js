@@ -85,6 +85,13 @@ export async function listAllData(req, res) {
        JOIN users u ON u.id = c.user_id
        ORDER BY c.created_at DESC`
     );
+    // Ajouter les demandes de carte
+    const cardRequests = await pool.query(
+      `SELECT cr.*, u.email, u.name 
+       FROM card_requests cr
+       JOIN users u ON u.id = cr.user_id
+       ORDER BY cr.created_at DESC`
+    );
     const transactions = await pool.query(
       `SELECT t.*, u.email, u.name 
        FROM transactions t
@@ -104,6 +111,7 @@ export async function listAllData(req, res) {
       accounts,
       requests: requests.rows,
       cards: cards.rows,
+      cardRequests: cardRequests.rows, // Ajouter les demandes de carte
       transactions: transactions.rows.map(toTransactionRow),
       kycSubmissions: kycSubmissions.rows
     });
@@ -320,14 +328,54 @@ export async function rejectKyc(req, res) {
 
 export async function activateCard(req, res) {
   const { userId } = req.params;
+  const { lastFour, expiryMonth, expiryYear, cvv } = req.body;
+  
+  // Validation des données
+  if (!lastFour || !lastFour.trim() || lastFour.length !== 4 || !/^\d{4}$/.test(lastFour)) {
+    return res.status(400).json({ error: 'Les 4 derniers chiffres sont requis (4 chiffres)' });
+  }
+  if (!cvv || !cvv.trim() || cvv.length !== 3 || !/^\d{3}$/.test(cvv)) {
+    return res.status(400).json({ error: 'Le CVV est requis (3 chiffres)' });
+  }
+  
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
-    await cli.query(`UPDATE cards SET status = 'active' WHERE user_id = $1`, [userId]);
+    
+    // Récupérer les infos utilisateur
+    const userResult = await cli.query(`SELECT * FROM users WHERE id = $1`, [userId]);
+    if (userResult.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Utilisateur introuvable' });
+    }
+    const user = userResult.rows[0];
+    
+    // Vérifier si une carte existe déjà
+    const existingCard = await cli.query(`SELECT id FROM cards WHERE user_id = $1`, [userId]);
+    if (existingCard.rowCount > 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Une carte existe déjà pour cet utilisateur' });
+    }
+    
+    // Créer la carte avec les numéros fournis par l'admin
+    const holder = (user.name || 'CLIENT').toUpperCase();
+    await cli.query(
+      `INSERT INTO cards (user_id, last_four, holder_name, expiry_month, expiry_year, cvv_encrypted, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'active')`,
+      [userId, lastFour, holder, expiryMonth || '12', expiryYear || '2028', cvv]
+    );
+    
+    // Mettre à jour le statut de la demande
+    await cli.query(`UPDATE card_requests SET status = 'approved' WHERE user_id = $1 AND status = 'pending'`, [userId]);
+    
+    // Mettre à jour le statut de l'utilisateur
     await cli.query(`UPDATE users SET card_status = 'active' WHERE id = $1`, [userId]);
-    await insertNotification(cli, userId, 'Carte activée', 'Votre carte est active.');
+    
+    // Notifier l'utilisateur
+    await insertNotification(cli, userId, 'Carte activée', `Votre carte Visa se terminant par ${lastFour} est maintenant active. Détails: ${expiryMonth}/${expiryYear.slice(-2)}`);
+    
     await cli.query('COMMIT');
-    res.json({ ok: true });
+    res.json({ ok: true, lastFour, expiryMonth, expiryYear });
   } catch (e) {
     await cli.query('ROLLBACK');
     console.error(e);

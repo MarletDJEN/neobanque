@@ -78,16 +78,17 @@ export default function AdminPage() {
   const accounts = data?.accounts || [];
   const requests = data?.requests || [];
   const cardsAdmin = data?.cards || [];
+  const cardRequests = data?.cardRequests || [];
   const transactions = data?.transactions || [];
   const kycSubmissions = data?.kycSubmissions || [];
 
   const pendingIban = requests.filter((r) => (r.type === 'iban_request' || r.step === 'iban_request') && r.status === 'pending').length;
   const pendingKyc = kycSubmissions.filter((r) => r.status === 'pending').length;
-  const pendingCards = cardsAdmin.filter((c) => c.status === 'pending').length;
+  const pendingCards = cardRequests.filter((c) => c.status === 'pending').length; // Utiliser cardRequests
   const pendingAccounts = users.filter((u) => u.accountStatus === 'pending').length;
   const pendingActivations = requests.filter((r) => r.step === 'transfer_proof' && r.status === 'pending').length;
   const totalBalance = accounts.reduce((s, a) => s + (a.balance || 0), 0);
-  const shared = { users, requests, accounts, cards: cardsAdmin, transactions, kycSubmissions, setTab, load, adminId: user?.id };
+  const shared = { users, requests, accounts, cards: cardsAdmin, cardRequests, transactions, kycSubmissions, setTab, load, adminId: user?.id };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -776,8 +777,8 @@ function TabActivation({ users, requests, load }) {
   );
 }
 
-function TabCards({ cards, users, load }) {
-  const pending = cards.filter((c) => c.status === 'pending');
+function TabCards({ cards, cardRequests, users, load }) {
+  const pending = cardRequests.filter((c) => c.status === 'pending'); // Utiliser cardRequests
   const [cardForms, setCardForms] = useState({});
 
   const getUserInfo = (userId) => {

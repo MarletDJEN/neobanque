@@ -6,7 +6,7 @@ import { CreditCard, Eye, EyeOff, Plus } from 'lucide-react';
 
 export default function CardPage({ card, onRefresh }) {
   const { userProfile } = useAuth();
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(true); // Par défaut, tout est visible
   const [requesting, setRequesting] = useState(false);
 
   const requestCard = async () => {
@@ -58,24 +58,56 @@ export default function CardPage({ card, onRefresh }) {
               <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -translate-y-10 translate-x-10" />
               <div className="absolute bottom-0 left-10 w-16 h-16 bg-white/5 rounded-full translate-y-8" />
               <p className="text-[11px] opacity-80 mb-6">NeoBank</p>
-              <p className="text-[15px] font-mono tracking-widest mb-2">•••• •••• •••• {card.last4}</p>
+              <p className="text-[15px] font-mono tracking-widest mb-2">
+                {showDetails ? '•••• •••• •••• ' + card.last4 : '•••• •••• •••• ' + card.last4}
+              </p>
               <div className="flex justify-between text-[11px] opacity-90">
                 <div>
                   <span className="block opacity-60">Expire</span>
                   {card.expiryMonth}/{card.expiryYear}
                 </div>
                 <div className="text-right">
-                  <span className="block opacity-60">CVV {!showDetails && '•••'}</span>
-                  {showDetails ? '•••' : '•••'}
+                  <span className="block opacity-60">CVV</span>
+                  {showDetails ? card.cvvEncrypted || '•••' : '•••'}
                 </div>
               </div>
               <p className="text-[10px] mt-4 opacity-70 truncate">{card.holderName || userProfile?.displayName}</p>
             </div>
           </div>
+          
+          {/* Section détails complets */}
+          {showDetails && (
+            <div className="bg-white border border-slate-100 rounded-xl p-4 space-y-3">
+              <h3 className="text-[13px] font-semibold text-slate-800">Détails complets de votre carte</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-[12px] text-slate-600">Numéro complet</span>
+                  <span className="text-[12px] font-mono font-medium">•••• •••• •••• {card.last4}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-[12px] text-slate-600">4 derniers chiffres</span>
+                  <span className="text-[12px] font-mono font-medium">{card.last4}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-[12px] text-slate-600">CVV</span>
+                  <span className="text-[12px] font-mono font-medium">{card.cvvEncrypted || 'Non disponible'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-[12px] text-slate-600">Date d'expiration</span>
+                  <span className="text-[12px] font-mono font-medium">{card.expiryMonth}/{card.expiryYear}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-[12px] text-slate-600">Titulaire</span>
+                  <span className="text-[12px] font-medium">{card.holderName || userProfile?.displayName}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="flex justify-center gap-2 flex-wrap">
             <button type="button" onClick={() => setShowDetails((s) => !s)} className="text-[12px] text-slate-600 flex items-center gap-1.5">
               {showDetails ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              {showDetails ? 'Masquer' : 'Afficher'} CVV
+              {showDetails ? 'Masquer les détails' : 'Afficher les détails'}
             </button>
             {card.status === 'active' && (
               <button type="button" onClick={blockCard} className="text-[12px] text-red-600 font-medium">
@@ -84,7 +116,7 @@ export default function CardPage({ card, onRefresh }) {
             )}
           </div>
           <p className="text-center text-[11px] text-slate-500">
-            {card.status === 'pending' && 'En attente d’activation par l’administrateur'}
+            {card.status === 'pending' && 'En attente d\'activation par l\'administrateur'}
             {card.status === 'blocked' && 'Carte bloquée'}
             {card.status === 'active' && 'Carte active'}
           </p>

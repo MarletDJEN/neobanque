@@ -265,24 +265,31 @@ export async function requestCard(req, res) {
     await cli.query('BEGIN');
     const u = await cli.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [req.userId]);
     if (u.rowCount === 0) throw new Error('not_found');
+    
+    // Vérifier si une demande existe déjà
+    const existingRequest = await cli.query(`SELECT id FROM card_requests WHERE user_id = $1 AND status = 'pending'`, [req.userId]);
+    if (existingRequest.rowCount > 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Une demande est déjà en cours' });
+    }
+    
+    // Vérifier si une carte existe déjà
     const ex = await cli.query(`SELECT id FROM cards WHERE user_id = $1`, [req.userId]);
     if (ex.rowCount > 0) {
       await cli.query('ROLLBACK');
-      return res.status(400).json({ error: 'Une demande ou carte existe déjà' });
+      return res.status(400).json({ error: 'Une carte existe déjà' });
     }
-    const last4 = String(Math.floor(1000 + Math.random() * 9000));
-    const cvv = String(Math.floor(100 + Math.random() * 900));
-    const holder = (u.rows[0].name || 'CLIENT').toUpperCase();
-    await cli.query(
-      `INSERT INTO cards (user_id, last_four, holder_name, expiry_month, expiry_year, cvv_encrypted, status)
-       VALUES ($1, $2, $3, '12', '2028', $4, 'pending')`,
-      [req.userId, last4, holder, cvv]
-    );
+    
+    // Créer seulement la demande, pas la carte (l'admin attribuera les numéros)
     await cli.query(
       `INSERT INTO card_requests (user_id, status) VALUES ($1, 'pending')`,
       [req.userId]
     );
     await cli.query(`UPDATE users SET card_status = 'requested' WHERE id = $1`, [req.userId]);
+    
+    // Notifier l'admin
+    await insertNotification(cli, u.rows[0].id, 'Demande de carte', 'Votre demande de carte a été soumise et est en attente de validation par l\'administrateur.');
+    
     await cli.query('COMMIT');
     res.json({ ok: true });
   } catch (e) {
