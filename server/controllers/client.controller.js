@@ -240,12 +240,14 @@ export async function requestIban(req, res) {
       return res.status(400).json({ error: 'Demande déjà traitée ou IBAN déjà attribué' });
     }
     await cli.query(`UPDATE users SET iban_status = 'requested' WHERE id = $1`, [req.userId]);
+    
+    // Utiliser account_activation_requests comme le reste du système
     const exReq = await cli.query(
-      `SELECT id FROM iban_requests WHERE user_id = $1 AND status = 'pending' LIMIT 1`,
+      `SELECT id FROM account_activation_requests WHERE user_id = $1 AND step = 'iban_request' AND status = 'pending' LIMIT 1`,
       [req.userId]
     );
     if (exReq.rowCount === 0) {
-      await cli.query(`INSERT INTO iban_requests (user_id, status) VALUES ($1, 'pending')`, [req.userId]);
+      await cli.query(`INSERT INTO account_activation_requests (user_id, step, status) VALUES ($1, 'iban_request', 'pending')`, [req.userId]);
     }
     await cli.query('COMMIT');
     const after = await pool.query('SELECT * FROM users WHERE id = $1', [req.userId]);
