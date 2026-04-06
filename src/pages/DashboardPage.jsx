@@ -13,7 +13,7 @@ import TransferPage from '../components/dashboard/TransferPage.jsx';
 import ProfilePage from '../components/dashboard/ProfilePage.jsx';
 import ActivationRequestPage from '../components/dashboard/ActivationRequestPage.jsx';
 import NotificationsPanel from '../components/dashboard/NotificationsPanel';
-import { Clock, Menu, Ban } from 'lucide-react';
+import { Clock, Menu, Ban, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 function PendingBanner({ suspended }) {
