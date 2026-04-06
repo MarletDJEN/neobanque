@@ -17,6 +17,9 @@ export default function IbanRequestPage({ account, onRefresh }) {
   // Déterminer l'état actuel
   const status = account?.ibanStatus || 'none';
   
+  // Debug pour voir les données
+  console.log('DEBUG IbanRequestPage:', { account, status, iban: account?.iban, ibanProof: account?.ibanProof });
+  
   const handleRequestIban = async () => {
     setLoading(true);
     try {
@@ -238,5 +241,29 @@ export default function IbanRequestPage({ account, onRefresh }) {
     );
   }
 
-  return null;
+  // Fallback : si aucun statut ne correspond, afficher un message
+  return (
+    <div className="space-y-4 fade-in max-w-xl">
+      <div><h1 className="text-[19px] font-semibold tracking-tight">IBAN / BIC</h1><p className="text-[12px] text-slate-500 mt-0.5">Coordonnées bancaires internationales</p></div>
+      
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <h3 className="font-semibold text-[13px] text-amber-800 mb-2">État inconnu</h3>
+        <p className="text-[11px] text-amber-700 mb-2">
+          Statut IBAN : <span className="font-mono">{status}</span>
+        </p>
+        <p className="text-[11px] text-amber-700">
+          IBAN : <span className="font-mono">{account?.iban || 'Non défini'}</span>
+        </p>
+        <p className="text-[11px] text-amber-700">
+          Preuve : <span className="font-mono">{account?.ibanProof ? 'Oui' : 'Non'}</span>
+        </p>
+        <button 
+          onClick={() => onRefresh?.()} 
+          className="mt-3 px-4 py-2 bg-amber-600 text-white rounded-lg text-[11px]"
+        >
+          Actualiser
+        </button>
+      </div>
+    </div>
+  );
 }
