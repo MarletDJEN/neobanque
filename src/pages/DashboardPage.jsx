@@ -50,6 +50,17 @@ export default function DashboardPage() {
     if (userProfile?.role === 'admin') navigate('/admin', { replace: true });
   }, [userProfile, navigate]);
 
+  // Polling pour vérifier les changements de statut en temps réel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (account && (account.status === 'pending' || account.ibanStatus === 'pending')) {
+        loadDashboard();
+      }
+    }, 5000); // Vérifier toutes les 5 secondes
+
+    return () => clearInterval(interval);
+  }, [account, loadDashboard]);
+
   const loadDashboard = useCallback(async () => {
     try {
       const { data } = await api.get('/me');
