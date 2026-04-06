@@ -79,6 +79,17 @@ export async function listAllData(req, res) {
        JOIN users u ON u.id = ar.user_id
        ORDER BY ar.created_at DESC`
     );
+    
+    // Ajouter les demandes IBAN
+    const ibanRequestsQuery = await pool.query(
+      `SELECT ir.*, u.email, u.name, 'iban_request' as type
+       FROM iban_requests ir
+       JOIN users u ON u.id = ir.user_id
+       ORDER BY ir.created_at DESC`
+    );
+    
+    // Combiner toutes les demandes
+    const allRequests = [...requests.rows, ...ibanRequestsQuery.rows];
     const cards = await pool.query(
       `SELECT c.*, u.email, u.name 
        FROM cards c
@@ -109,7 +120,7 @@ export async function listAllData(req, res) {
       users: users.rows.map(mapUserAdminRow),
       allUsers: users.rows.map(mapUserAdminRow),
       accounts,
-      requests: requests.rows,
+      requests: allRequests,
       cards: cards.rows,
       cardRequests: cardRequests.rows, // Ajouter les demandes de carte
       transactions: transactions.rows.map(toTransactionRow),

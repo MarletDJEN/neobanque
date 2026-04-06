@@ -445,15 +445,15 @@ function TabKyc({ kycSubmissions, load }) {
 }
 
 function TabIban({ users, requests, load }) {
-  // Montrer TOUTES les demandes IBAN pour debug
-  const allIbanRequests = requests.filter((r) => (r.type === 'iban_request' || r.step === 'iban_request'));
-  const pending = allIbanRequests.filter((r) => r.status === 'pending');
+  // Filtrer les demandes IBAN depuis la table iban_requests
+  const ibanRequests = requests.filter((r) => r.type === 'iban_request' || (r.step && r.step === 'iban_request') || (!r.step && !r.type && r.status));
+  const pending = ibanRequests.filter((r) => r.status === 'pending');
   const [ibanForm, setIbanForm] = useState({});
 
   // Debug pour voir les demandes
   console.log('Toutes les requests:', requests);
-  console.log('Toutes les demandes IBAN (tous statuts):', allIbanRequests);
-  console.log('Demandes IBAN filtrées (pending seulement):', pending);
+  console.log('Demandes IBAN filtrées:', ibanRequests);
+  console.log('Demandes IBAN en attente:', pending);
 
   const assign = async (userId) => {
     const f = ibanForm[userId] || {};
