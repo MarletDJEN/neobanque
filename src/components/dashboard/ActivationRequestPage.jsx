@@ -73,7 +73,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
           step: 'iban_request'
         });
         
-        toast.success('IBAN attribué avec succès !');
+        toast.success('Demande d\'IBAN envoyée avec succès !');
         onSuccess?.(); // Recharger les données pour afficher le nouvel IBAN
       } catch (err) {
         toast.error(err.response?.data?.error || 'Erreur lors de la demande d\'IBAN');
