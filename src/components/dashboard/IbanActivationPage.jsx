@@ -6,14 +6,21 @@ import { Upload, CheckCircle, AlertCircle, ArrowLeft, CreditCard, FileText, Cloc
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
 export default function IbanActivationPage({ account, onBack, onSuccess }) {
-  const [currentStep, setCurrentStep] = useState(() => {
-    // Déterminer l'étape en fonction du statut IBAN
-    if (!account?.iban) return 'request'; // Pas d'IBAN attribué
-    if (account?.ibanStatus === 'assigned' && !account?.ibanProof) return 'deposit'; // IBAN attribué mais pas de preuve
-    if (account?.ibanStatus === 'active') return 'completed'; // Processus terminé
-    return 'request'; // Par défaut
-  });
+  // Déterminer l'étape initiale
+  const getInitialStep = () => {
+    // Si l'IBAN est déjà actif, aller directement à l'étape terminée
+    if (account?.ibanStatus === 'active') {
+      return 'completed';
+    }
+    // Si l'IBAN est déjà attribué mais pas encore actif, aller à l'étape de dépôt
+    if (account?.iban && account?.ibanStatus === 'assigned' && !account?.ibanProof) {
+      return 'deposit';
+    }
+    // Sinon, demander l'IBAN
+    return 'request';
+  };
   
+  const [currentStep, setCurrentStep] = useState(getInitialStep);
   const [formData, setFormData] = useState({
     amount: '500',
     proofFile: null,

@@ -90,24 +90,45 @@ export async function requestAccountActivation(req, res) {
   } else if (step === 'transfer_proof') {
     // Deuxième étape : preuve de virement de 500€
     const amt = Number(amount);
+    
+    // Validation stricte du montant
     if (!Number.isFinite(amt) || amt <= 0) {
       return res.status(400).json({ error: 'Montant invalide' });
     }
     if (amt !== 500) {
       return res.status(400).json({ error: 'Le montant doit être exactement de 500€' });
     }
+    
     if (!proofUrl?.trim()) {
       return res.status(400).json({ error: 'Preuve de virement requise' });
     }
     
-    // Valider et traiter l'URL base64
+    // Validation améliorée de l'URL de preuve
     let processedProofUrl = proofUrl.trim();
+    
+    // Vérifier si c'est une URL base64 valide
     if (processedProofUrl.startsWith('data:image/')) {
-      // C'est une URL base64, on la garde telle quelle
-      // En production, vous pourriez vouloir la sauvegarder dans un fichier
-      console.log('Preuve de virement reçue en base64, taille:', processedProofUrl.length);
+      // Valider le format base64
+      const base64Match = processedProofUrl.match(/^data:image\/(png|jpg|jpeg);base64,(.+)$/);
+      if (!base64Match) {
+        return res.status(400).json({ error: 'Format d\'image invalide. Formats acceptés: PNG, JPG, JPEG' });
+      }
+      
+      // Vérifier la taille approximative de l'image base64
+      const base64Data = base64Match[1];
+      const imageSizeKB = Math.round(base64Data.length * 0.75 / 1024); // Approximation
+      
+      if (imageSizeKB > 5 * 1024) { // 5MB max
+        return res.status(400).json({ error: 'Image trop volumineuse. Taille maximale: 5MB' });
+      }
+      
+      console.log('Preuve de virement reçue en base64, taille estimée:', imageSizeKB, 'KB');
+      processedProofUrl = processedProofUrl; // Garder l'URL base64
+    } else if (processedProofUrl.startsWith('http://') || processedProofUrl.startsWith('https://')) {
+      // URL externe (rare mais possible)
+      console.log('Preuve de virement reçue comme URL externe:', processedProofUrl);
     } else {
-      return res.status(400).json({ error: 'Format de preuve invalide' });
+      return res.status(400).json({ error: 'Format de preuve invalide. Accepté: image base64 ou URL HTTP/HTTPS' });
     }
     
     const cli = await pool.connect();
