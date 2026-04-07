@@ -134,7 +134,7 @@ export default function IbanRequestPage({ account, onRefresh }) {
   }
 
   // Étape 2 : Envoyer la preuve de virement
-  if (status === 'assigned' || status === 'approved') {
+  if ((status === 'assigned' || status === 'approved') && !account?.ibanProof) {
     return (
       <div className="space-y-4 fade-in max-w-xl">
         <div><h1 className="text-[19px] font-semibold tracking-tight">IBAN / BIC</h1><p className="text-[12px] text-slate-500 mt-0.5">Activation de votre IBAN</p></div>
@@ -245,7 +245,7 @@ export default function IbanRequestPage({ account, onRefresh }) {
   }
 
   // Étape 3 : IBAN actif
-  if (status === 'active') {
+  if (status === 'active' || (status === 'approved' && account?.ibanProof)) {
     return (
       <div className="space-y-4 fade-in max-w-xl">
         <div><h1 className="text-[19px] font-semibold tracking-tight">IBAN / BIC</h1><p className="text-[12px] text-slate-500 mt-0.5">Coordonnées bancaires internationales</p></div>
