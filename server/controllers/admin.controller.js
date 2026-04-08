@@ -24,6 +24,7 @@ function mapUserAdminRow(row) {
           ? 'pending'
           : 'none',
     status: row.status,
+    accountVerified: row.account_verified,
   };
 }
 

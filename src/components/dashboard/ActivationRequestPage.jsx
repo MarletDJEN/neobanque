@@ -28,7 +28,7 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
     setCurrentStep(isIbanApproved ? 'transfer_proof' : 'iban_request');
   }, [account?.iban, account?.ibanStatus]);
 
-  const isAccountActivated = account?.status === 'active' && account?.accountVerified;
+  const isAccountActivated = account?.status === 'active' && account?.accountVerified && account?.ibanStatus === 'active';
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];

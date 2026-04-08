@@ -8,12 +8,12 @@ const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency:
 export default function IbanActivationPage({ account, onBack, onSuccess }) {
   // Déterminer l'étape initiale
   const getInitialStep = () => {
-    // Si l'IBAN est déjà actif, aller directement à l'étape terminée
-    if (account?.ibanStatus === 'active') {
+    // Si le compte est fully activé, aller directement à l'étape terminée
+    if (account?.status === 'active' && account?.accountVerified && account?.ibanStatus === 'active') {
       return 'completed';
     }
     // Si l'IBAN est déjà attribué mais pas encore actif, aller à l'étape de dépôt
-    if (account?.iban && account?.ibanStatus === 'assigned' && !account?.ibanProof) {
+    if (account?.iban && (account?.ibanStatus === 'assigned' || account?.ibanStatus === 'approved')) {
       return 'deposit';
     }
     // Sinon, demander l'IBAN

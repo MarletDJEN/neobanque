@@ -9,6 +9,7 @@ import AccountPage from '../components/dashboard/AccountPage';
 import CardPage from '../components/dashboard/CardPage';
 import IbanRequestPage from '../components/dashboard/IbanRequestPage';
 import IbanActivationPage from '../components/dashboard/IbanActivationPage';
+import ActivationRequestPage from '../components/dashboard/ActivationRequestPage';
 import TransactionsPage from '../components/dashboard/TransactionsPage.jsx';
 import TransferPage from '../components/dashboard/TransferPage.jsx';
 import ProfilePage from '../components/dashboard/ProfilePage.jsx';
@@ -56,8 +57,8 @@ export default function DashboardPage() {
       
       // Détecter les changements de statut du compte
       if (lastAccountStatus && newAccount) {
-        const wasInactive = !(lastAccountStatus?.status === 'active' && lastAccountStatus?.accountVerified);
-        const isActiveNow = newAccount?.status === 'active' && newAccount?.accountVerified;
+        const wasInactive = !(lastAccountStatus?.status === 'active' && lastAccountStatus?.accountVerified && lastAccountStatus?.ibanStatus === 'active');
+        const isActiveNow = newAccount?.status === 'active' && newAccount?.accountVerified && newAccount?.ibanStatus === 'active';
         
         console.log('DEBUG Changement statut compte:', {
           wasInactive,
@@ -65,13 +66,15 @@ export default function DashboardPage() {
           lastStatus: lastAccountStatus?.status,
           newStatus: newAccount?.status,
           lastVerified: lastAccountStatus?.accountVerified,
-          newVerified: newAccount?.accountVerified
+          newVerified: newAccount?.accountVerified,
+          lastIbanStatus: lastAccountStatus?.ibanStatus,
+          newIbanStatus: newAccount?.ibanStatus
         });
         
-        // Notification si le compte vient d'être activé
+        // Notification si le compte vient d'être pleinement activé
         if (wasInactive && isActiveNow) {
           console.log('DEBUG: Envoi notification compte activé');
-          toast.success('🎉 Votre compte est maintenant activé !', {
+          toast.success('Félicitations ! Votre compte et votre IBAN sont maintenant activés !', {
             duration: 5000,
             position: 'top-center'
           });
@@ -79,7 +82,15 @@ export default function DashboardPage() {
         
         // Notification si l'IBAN vient d'être attribué
         if (!lastAccountStatus?.iban && newAccount?.iban) {
-          toast.success('📋 Votre IBAN a été attribué !', {
+          toast.success('IBAN attribué !', {
+            duration: 4000,
+            position: 'top-center'
+          });
+        }
+        
+        // Notification si l'IBAN vient d'être activé (passage de assigned/approved à active)
+        if (lastAccountStatus?.ibanStatus !== 'active' && newAccount?.ibanStatus === 'active') {
+          toast.success('IBAN activé ! Vous pouvez maintenant utiliser tous les services.', {
             duration: 4000,
             position: 'top-center'
           });
@@ -108,7 +119,8 @@ export default function DashboardPage() {
     
     // Polling simple uniquement pour les comptes en attente
     const interval = setInterval(() => {
-      if (account?.status === 'pending' || account?.ibanStatus === 'pending') {
+      if (account?.status === 'pending' || account?.ibanStatus === 'pending' || 
+          (account?.iban && account?.ibanStatus === 'assigned' && !account?.accountVerified)) {
         loadDashboard();
       }
     }, 8000); // Toutes les 8 secondes
@@ -148,6 +160,8 @@ export default function DashboardPage() {
         return <CardPage card={card} onRefresh={loadDashboard} />;
       case 'iban':
         return <IbanRequestPage account={account} onRefresh={loadDashboard} />;
+      case 'activation':
+        return <ActivationRequestPage account={account} onBack={() => setActivePage('overview')} onSuccess={loadDashboard} />;
       case 'transactions':
         return <TransactionsPage transactions={transactions} onRefresh={loadDashboard} />;
       case 'transfer':

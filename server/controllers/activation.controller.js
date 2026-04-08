@@ -181,7 +181,7 @@ export async function approveActivationRequest(req, res) {
       await cli.query('COMMIT');
       res.json({ ok: true, iban: cleanIban, bic: finalBic });
     } else if (request.step === 'transfer_proof') {
-      await cli.query(`UPDATE users SET status = 'active', account_verified = true WHERE id = $1`, [request.user_id]);
+      await cli.query(`UPDATE users SET status = 'active', account_verified = true, iban_status = 'active' WHERE id = $1`, [request.user_id]);
       await cli.query(`UPDATE account_activation_requests SET status = 'approved', reviewed_at = now() WHERE id = $1`, [id]);
       await cli.query(`UPDATE users SET balance = balance + $1 WHERE id = $2`, [request.amount, request.user_id]);
       await cli.query(
@@ -189,7 +189,7 @@ export async function approveActivationRequest(req, res) {
         [request.user_id, request.amount, "Virement d'activation de compte"]
       );
       await insertNotification(cli, request.user_id, 'Compte activé !',
-        `Votre demande d'activation a été approuvée. Les ${request.amount} € ont été crédités sur votre compte.`);
+        `Votre demande d'activation a été approuvée. Les ${request.amount} ¥ ont été crédités sur votre compte. Votre IBAN est maintenant entièrement actif.`);
       await cli.query('COMMIT');
       res.json({ ok: true });
     }
