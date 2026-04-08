@@ -177,12 +177,22 @@ export async function requestAccountActivation(req, res) {
 }
 
 export async function transfer(req, res) {
-  const { toEmail, amount: amt, label } = req.body;
+  const { accountHolder, iban, bic, amount: amt, label } = req.body;
   const amount = Number(amt);
-  if (!toEmail?.trim() || !Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({ error: 'Destinataire et montant requis' });
+  if (!accountHolder?.trim() || !iban?.trim() || !bic?.trim() || !Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Informations du bénéficiaire et montant requis' });
   }
-  const mail = toEmail.trim().toLowerCase();
+  
+  // Validation basique de l'IBAN (doit commencer par 2 lettres et faire au moins 15 caractères)
+  if (!/^[A-Z]{2}/.test(iban.trim().toUpperCase()) || iban.trim().length < 15) {
+    return res.status(400).json({ error: 'IBAN invalide' });
+  }
+  
+  // Validation basique du BIC (8 ou 11 caractères alphanumériques)
+  if (!/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic.trim().toUpperCase())) {
+    return res.status(400).json({ error: 'BIC/SWIFT invalide' });
+  }
+  
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
@@ -192,38 +202,19 @@ export async function transfer(req, res) {
       await cli.query('ROLLBACK');
       return res.status(403).json({ error: 'Virement non autorisé' });
     }
-    if (me.rows[0].email === mail) {
-      await cli.query('ROLLBACK');
-      return res.status(400).json({ error: 'Impossible de virer vers vous-même' });
-    }
-    const rec = await cli.query(`SELECT * FROM users WHERE email = $1 FOR UPDATE`, [mail]);
-    if (rec.rowCount === 0) {
-      await cli.query('ROLLBACK');
-      return res.status(404).json({ error: 'Aucun compte avec cet email' });
-    }
-    const recipient = rec.rows[0];
-    if (!assertCanOperate(recipient)) {
-      await cli.query('ROLLBACK');
-      return res.status(400).json({ error: 'Compte destinataire inactif' });
-    }
     const bal = Number(me.rows[0].balance);
     if (bal < amount) {
       await cli.query('ROLLBACK');
       return res.status(400).json({ error: 'Solde insuffisant' });
     }
     await cli.query(`UPDATE users SET balance = balance - $1 WHERE id = $2`, [amount, req.userId]);
-    await cli.query(`UPDATE users SET balance = balance + $1 WHERE id = $2`, [amount, recipient.id]);
-    const lblOut = label || `Virement vers ${mail}`;
-    const lblIn = label || `Virement de ${me.rows[0].email}`;
+    
+    const lbl = label || `Virement externe vers ${accountHolder.trim()}`;
     await cli.query(
-      `INSERT INTO transactions (user_id, type, amount, label, counterparty_user_id) VALUES ($1, 'withdrawal', $2, $3, $4)`,
-      [req.userId, amount, lblOut, recipient.id]
+      `INSERT INTO transactions (user_id, type, amount, label, external_iban, external_bic, external_account_holder) VALUES ($1, 'withdrawal', $2, $3, $4, $5, $6)`,
+      [req.userId, amount, lbl, iban.trim().toUpperCase(), bic.trim().toUpperCase(), accountHolder.trim()]
     );
-    await cli.query(
-      `INSERT INTO transactions (user_id, type, amount, label, counterparty_user_id) VALUES ($1, 'deposit', $2, $3, $4)`,
-      [recipient.id, amount, lblIn, req.userId]
-    );
-    await insertNotification(cli, recipient.id, 'Virement reçu', `Vous avez reçu ${amount} € de ${me.rows[0].email}.`);
+    
     await cli.query('COMMIT');
     const after = await pool.query('SELECT * FROM users WHERE id = $1', [req.userId]);
     res.json({ account: toAccount(after.rows[0]) });

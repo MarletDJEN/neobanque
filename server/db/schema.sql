@@ -30,6 +30,9 @@ CREATE TABLE transactions (
   label TEXT,
   bank_name TEXT,
   counterparty_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  external_iban TEXT,
+  external_bic TEXT,
+  external_account_holder TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
