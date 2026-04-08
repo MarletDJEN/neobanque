@@ -522,7 +522,6 @@ export async function adminWithdraw(req, res) {
     cli.release();
   }
 }
-import { pool } from '../config/database.js';
 
 export async function deleteUser(req, res) {
   const { id } = req.params;
