@@ -177,7 +177,7 @@ export async function requestAccountActivation(req, res) {
 }
 
 // Générer un code aléatoire de 8 caractères
-function generateWithdrawalCode() {
+function generateCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
   for (let i = 0; i < 8; i++) {
@@ -235,7 +235,7 @@ export async function generateWithdrawalCode(req, res) {
     let code;
     let codeExists;
     do {
-      code = generateWithdrawalCode();
+      code = generateCode();
       codeExists = await cli.query(`SELECT id FROM withdrawal_codes WHERE code = $1`, [code]);
     } while (codeExists.rowCount > 0);
     
@@ -387,7 +387,7 @@ export async function validateWithdrawalCode(req, res) {
     );
     
     // Notifier l'utilisateur
-    let message = `Étape ${step.step.order} complétée: ${fmt(stepAmount)} (${step.percentage}%) débité.`;
+    let message = `Étape ${step.step_order} complétée: ${fmt(stepAmount)} (${step.percentage}%) débité.`;
     if (isComplete) {
       message += ` Retrait complété à 100% !`;
     } else if (hasMoreSteps) {
