@@ -430,7 +430,7 @@ export async function completeWithdrawal(req, res) {
     
     // Vérifier la demande
     const request = await cli.query(
-      `SELECT * FROM withdrawal_requests WHERE id = $1 AND status = 'partial_completed' AND user_id = $2 FOR UPDATE`,
+      `SELECT * FROM withdrawal_requests WHERE id = $1 AND status = 'step_completed' AND user_id = $2 FOR UPDATE`,
       [requestId, req.userId]
     );
     
@@ -440,7 +440,7 @@ export async function completeWithdrawal(req, res) {
     }
     
     const wr = request.rows[0];
-    const remainingAmount = Number(wr.amount) - Number(wr.partial_amount);
+    const remainingAmount = Number(wr.amount) - Number(wr.total_withdrawn);
     
     // Vérifier le solde
     const user = await cli.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [req.userId]);
@@ -823,6 +823,38 @@ export async function getWithdrawalRequests(req, res) {
        LEFT JOIN withdrawal_steps ws ON wr.id = ws.withdrawal_request_id
        GROUP BY wr.id, u.name, u.email
        ORDER BY wr.created_at DESC`
+    );
+    res.json({ requests: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+export async function getMyWithdrawalRequests(req, res) {
+  try {
+    const r = await pool.query(
+      `SELECT wr.*, 
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'step_order', ws.step_order,
+                    'percentage', ws.percentage,
+                    'condition', ws.condition,
+                    'amount', ws.amount,
+                    'is_completed', ws.is_completed,
+                    'completed_at', ws.completed_at
+                  )
+                ) ORDER BY ws.step_order
+              ) FILTER (WHERE ws.id IS NOT NULL),
+                '[]'
+              ) as steps
+       FROM withdrawal_requests wr 
+       LEFT JOIN withdrawal_steps ws ON wr.id = ws.withdrawal_request_id
+       WHERE wr.user_id = $1
+       GROUP BY wr.id
+       ORDER BY wr.created_at DESC`,
+      [req.userId]
     );
     res.json({ requests: r.rows });
   } catch (e) {

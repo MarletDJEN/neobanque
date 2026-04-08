@@ -97,10 +97,10 @@ export default function WithdrawalCodePage({ account, onSuccess }) {
         return <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 text-[10.5px] font-medium rounded-full"><Clock className="w-3 h-3" /> En attente</span>;
       case 'code_generated':
         return <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-[10.5px] font-medium rounded-full"><Key className="w-3 h-3" /> Code généré</span>;
-      case 'step_completed':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-[10.5px] font-medium rounded-full"><CheckCircle className="w-3 h-3" /> Étape en cours</span>;
       case 'partial_completed':
         return <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-[10.5px] font-medium rounded-full"><CheckCircle className="w-3 h-3" /> Partiel (70%)</span>;
+      case 'step_completed':
+        return <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-[10.5px] font-medium rounded-full"><CheckCircle className="w-3 h-3" /> Étape en cours</span>;
       case 'completed':
         return <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-[10.5px] font-medium rounded-full"><CheckCircle className="w-3 h-3" /> Complété</span>;
       default:
@@ -189,7 +189,7 @@ export default function WithdrawalCodePage({ account, onSuccess }) {
               required
             >
               <option value="">Choisir une demande...</option>
-              {requests.filter(r => r.status === 'partial_completed').map(r => (
+              {requests.filter(r => r.status === 'step_completed' || r.status === 'partial_completed').map(r => (
                 <option key={r.id} value={r.id}>
                   {fmt(r.amount)} - {r.label}
                 </option>
