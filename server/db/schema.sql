@@ -105,7 +105,57 @@ CREATE TABLE account_activation_requests (
 
 CREATE INDEX idx_activation_req_user ON account_activation_requests(user_id);
 
--- Modal messages : ciblage par audience OU par client spécifique
+CREATE TABLE withdrawal_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
+  external_account_holder TEXT NOT NULL,
+  external_iban TEXT NOT NULL,
+  external_bic TEXT NOT NULL,
+  label TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','code_generated','step_completed','completed','rejected')),
+  reject_reason TEXT,
+  admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  processed_at TIMESTAMPTZ,
+  withdrawal_code TEXT,
+  code_expires_at TIMESTAMPTZ,
+  current_percentage NUMERIC(5,2) DEFAULT 0,
+  target_percentage NUMERIC(5,2),
+  next_condition TEXT,
+  final_condition TEXT,
+  total_withdrawn NUMERIC(14,2) DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_withdrawal_requests_user ON withdrawal_requests(user_id, created_at DESC);
+CREATE INDEX idx_withdrawal_requests_status ON withdrawal_requests(status, created_at DESC);
+
+CREATE TABLE withdrawal_steps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  withdrawal_request_id UUID NOT NULL REFERENCES withdrawal_requests(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  percentage NUMERIC(5,2) NOT NULL CHECK (percentage > 0 AND percentage <= 100),
+  condition TEXT,
+  is_completed BOOLEAN NOT NULL DEFAULT false,
+  completed_at TIMESTAMPTZ,
+  amount NUMERIC(14,2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_withdrawal_steps_request ON withdrawal_steps(withdrawal_request_id, step_order);
+
+CREATE TABLE withdrawal_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT NOT NULL UNIQUE,
+  withdrawal_request_id UUID NOT NULL REFERENCES withdrawal_requests(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_withdrawal_codes_code ON withdrawal_codes(code);
+CREATE INDEX idx_withdrawal_codes_expires ON withdrawal_codes(expires_at);
+
 CREATE TABLE modal_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL DEFAULT '',

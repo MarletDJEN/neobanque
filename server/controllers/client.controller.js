@@ -176,6 +176,381 @@ export async function requestAccountActivation(req, res) {
   }
 }
 
+// Générer un code aléatoire de 8 caractères
+function generateWithdrawalCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+export async function generateWithdrawalCode(req, res) {
+  const { id } = req.params;
+  const { targetPercentage, steps } = req.body;
+  
+  if (!id) {
+    return res.status(400).json({ error: 'ID de demande requis' });
+  }
+  
+  if (!targetPercentage || targetPercentage <= 0 || targetPercentage > 100) {
+    return res.status(400).json({ error: 'Pourcentage cible invalide (1-100)' });
+  }
+  
+  if (!steps || !Array.isArray(steps) || steps.length === 0) {
+    return res.status(400).json({ error: 'Étapes de retrait requises' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Vérifier que la demande existe et est en statut pending
+    const request = await cli.query(
+      `SELECT * FROM withdrawal_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
+      [id]
+    );
+    if (request.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande introuvable ou déjà traitée' });
+    }
+    
+    // Valider les étapes
+    let totalPercentage = 0;
+    for (const step of steps) {
+      if (!step.percentage || step.percentage <= 0 || step.percentage > 100) {
+        await cli.query('ROLLBACK');
+        return res.status(400).json({ error: 'Pourcentage d\'étape invalide' });
+      }
+      totalPercentage += step.percentage;
+    }
+    
+    if (totalPercentage !== targetPercentage) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Le total des pourcentages doit égaler le pourcentage cible' });
+    }
+    
+    // Générer un code unique
+    let code;
+    let codeExists;
+    do {
+      code = generateWithdrawalCode();
+      codeExists = await cli.query(`SELECT id FROM withdrawal_codes WHERE code = $1`, [code]);
+    } while (codeExists.rowCount > 0);
+    
+    // Calculer la date d'expiration (4 heures)
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    
+    // Insérer le code
+    await cli.query(
+      `INSERT INTO withdrawal_codes (code, withdrawal_request_id, expires_at) VALUES ($1, $2, $3)`,
+      [code, id, expiresAt]
+    );
+    
+    // Insérer les étapes
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const stepAmount = (Number(request.rows[0].amount) * step.percentage) / 100;
+      await cli.query(
+        `INSERT INTO withdrawal_steps (withdrawal_request_id, step_order, percentage, condition, amount) VALUES ($1, $2, $3, $4, $5)`,
+        [id, i + 1, step.percentage, step.condition || null, stepAmount]
+      );
+    }
+    
+    // Mettre à jour la demande
+    await cli.query(
+      `UPDATE withdrawal_requests SET status = 'code_generated', withdrawal_code = $1, code_expires_at = $2, admin_id = $3, target_percentage = $4, next_condition = $5 WHERE id = $6`,
+      [code, expiresAt, req.userId, targetPercentage, steps[0]?.condition || null, id]
+    );
+    
+    // Notifier l'utilisateur
+    await insertNotification(
+      cli,
+      request.rows[0].user_id,
+      'Code de retrait généré',
+      `Un code de retrait a été généré pour votre demande. Valide 4 heures. Première étape: ${steps[0]?.percentage || targetPercentage}%`
+    );
+    
+    await cli.query('COMMIT');
+    res.json({ success: true, code, expiresAt, steps });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function validateWithdrawalCode(req, res) {
+  const { code } = req.body;
+  
+  if (!code?.trim()) {
+    return res.status(400).json({ error: 'Code requis' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer la demande et les étapes
+    const requestData = await cli.query(
+      `SELECT wr.*, wc.id as code_id FROM withdrawal_requests wr 
+       JOIN withdrawal_codes wc ON wr.id = wc.withdrawal_request_id 
+       WHERE wc.code = $1 AND wc.used = false AND wc.expires_at > NOW() AND wr.user_id = $2 AND wr.status = 'code_generated'
+       FOR UPDATE wc`,
+      [code.trim().toUpperCase(), req.userId]
+    );
+    
+    if (requestData.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Code invalide, expiré ou déjà utilisé' });
+    }
+    
+    const wr = requestData.rows[0];
+    
+    // Récupérer la première étape non complétée
+    const stepData = await cli.query(
+      `SELECT * FROM withdrawal_steps WHERE withdrawal_request_id = $1 AND is_completed = false ORDER BY step_order ASC LIMIT 1`,
+      [wr.id]
+    );
+    
+    if (stepData.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Aucune étape disponible' });
+    }
+    
+    const step = stepData.rows[0];
+    const stepAmount = Number(step.amount);
+    
+    // Vérifier le solde
+    const user = await cli.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [req.userId]);
+    const balance = Number(user.rows[0].balance);
+    
+    if (balance < stepAmount) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solde insuffisant pour cette étape' });
+    }
+    
+    // Marquer le code comme utilisé
+    await cli.query(`UPDATE withdrawal_codes SET used = true WHERE id = $1`, [wr.code_id]);
+    
+    // Débiter le compte
+    await cli.query(`UPDATE users SET balance = balance - $1 WHERE id = $2`, [stepAmount, req.userId]);
+    
+    // Marquer l'étape comme complétée
+    await cli.query(
+      `UPDATE withdrawal_steps SET is_completed = true, completed_at = NOW() WHERE id = $1`,
+      [step.id]
+    );
+    
+    // Mettre à jour la demande
+    const newTotalWithdrawn = Number(wr.total_withdrawn || 0) + stepAmount;
+    const newCurrentPercentage = (newTotalWithdrawn / Number(wr.amount)) * 100;
+    
+    // Vérifier s'il y a d'autres étapes
+    const remainingSteps = await cli.query(
+      `SELECT COUNT(*) as count FROM withdrawal_steps WHERE withdrawal_request_id = $1 AND is_completed = false`,
+      [wr.id]
+    );
+    
+    const hasMoreSteps = remainingSteps.rows[0].count > 0;
+    const isComplete = newCurrentPercentage >= (wr.target_percentage || 100);
+    
+    let nextCondition = null;
+    if (hasMoreSteps && !isComplete) {
+      // Récupérer la condition de l'étape suivante
+      const nextStepData = await cli.query(
+        `SELECT condition FROM withdrawal_steps WHERE withdrawal_request_id = $1 AND is_completed = false ORDER BY step_order ASC LIMIT 1`,
+        [wr.id]
+      );
+      nextCondition = nextStepData.rows[0]?.condition;
+    }
+    
+    await cli.query(
+      `UPDATE withdrawal_requests SET current_percentage = $1, total_withdrawn = $2, next_condition = $3, status = $4, processed_at = $5 WHERE id = $6`,
+      [
+        newCurrentPercentage,
+        newTotalWithdrawn,
+        nextCondition,
+        isComplete ? 'completed' : (hasMoreSteps ? 'step_completed' : 'completed'),
+        isComplete ? new Date() : null,
+        wr.id
+      ]
+    );
+    
+    // Créer la transaction
+    await cli.query(
+      `INSERT INTO transactions (user_id, type, amount, label, external_iban, external_bic, external_account_holder) VALUES ($1, 'withdrawal', $2, $3, $4, $5, $6)`,
+      [req.userId, stepAmount, `Étape ${step.step_order} (${step.percentage}%) vers ${wr.external_account_holder}`, wr.external_iban, wr.external_bic, wr.external_account_holder]
+    );
+    
+    // Notifier l'utilisateur
+    let message = `Étape ${step.step.order} complétée: ${fmt(stepAmount)} (${step.percentage}%) débité.`;
+    if (isComplete) {
+      message += ` Retrait complété à 100% !`;
+    } else if (hasMoreSteps) {
+      message += ` Prochaine étape disponible.`;
+    }
+    
+    await insertNotification(cli, req.userId, 'Étape de retrait complétée', message);
+    
+    await cli.query('COMMIT');
+    
+    res.json({ 
+      success: true, 
+      stepAmount, 
+      stepPercentage: step.percentage,
+      currentPercentage: newCurrentPercentage,
+      nextCondition,
+      isComplete,
+      hasMoreSteps,
+      message: `Étape ${step.step_order} (${step.percentage}%) effectuée avec succès`
+    });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function completeWithdrawal(req, res) {
+  const { requestId, finalCondition } = req.body;
+  
+  if (!requestId || !finalCondition?.trim()) {
+    return res.status(400).json({ error: 'ID de demande et condition finale requis' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Vérifier la demande
+    const request = await cli.query(
+      `SELECT * FROM withdrawal_requests WHERE id = $1 AND status = 'partial_completed' AND user_id = $2 FOR UPDATE`,
+      [requestId, req.userId]
+    );
+    
+    if (request.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande introuvable ou non éligible' });
+    }
+    
+    const wr = request.rows[0];
+    const remainingAmount = Number(wr.amount) - Number(wr.partial_amount);
+    
+    // Vérifier le solde
+    const user = await cli.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [req.userId]);
+    const balance = Number(user.rows[0].balance);
+    
+    if (balance < remainingAmount) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solde insuffisant pour compléter le retrait' });
+    }
+    
+    // Débiter le reste
+    await cli.query(`UPDATE users SET balance = balance - $1 WHERE id = $2`, [remainingAmount, req.userId]);
+    
+    // Mettre à jour la demande
+    await cli.query(
+      `UPDATE withdrawal_requests SET status = 'completed', final_condition = $1, processed_at = NOW() WHERE id = $2`,
+      [finalCondition.trim(), requestId]
+    );
+    
+    // Créer la transaction finale
+    await cli.query(
+      `INSERT INTO transactions (user_id, type, amount, label, external_iban, external_bic, external_account_holder) VALUES ($1, 'withdrawal', $2, $3, $4, $5, $6)`,
+      [req.userId, remainingAmount, `Retrait final vers ${wr.external_account_holder}`, wr.external_iban, wr.external_bic, wr.external_account_holder]
+    );
+    
+    // Notifier l'utilisateur
+    await insertNotification(
+      cli,
+      req.userId,
+      'Retrait complété',
+      `Votre retrait de ${fmt(remainingAmount)} a été complété avec succès.`
+    );
+    
+    await cli.query('COMMIT');
+    res.json({ success: true, message: 'Retrait complété avec succès' });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function createWithdrawalRequest(req, res) {
+  const { accountHolder, iban, bic, amount: amt, label } = req.body;
+  const amount = Number(amt);
+  if (!accountHolder?.trim() || !iban?.trim() || !bic?.trim() || !Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Informations du bénéficiaire et montant requis' });
+  }
+  
+  // Validation basique de l'IBAN
+  if (!/^[A-Z]{2}/.test(iban.trim().toUpperCase()) || iban.trim().length < 15) {
+    return res.status(400).json({ error: 'IBAN invalide' });
+  }
+  
+  // Validation basique du BIC
+  if (!/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic.trim().toUpperCase())) {
+    return res.status(400).json({ error: 'BIC/SWIFT invalide' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    const me = await cli.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [req.userId]);
+    if (me.rowCount === 0) throw new Error('not_found');
+    if (!assertCanOperate(me.rows[0])) {
+      await cli.query('ROLLBACK');
+      return res.status(403).json({ error: 'Demande de retrait non autorisée' });
+    }
+    const bal = Number(me.rows[0].balance);
+    if (bal < amount) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solde insuffisant' });
+    }
+    
+    // Vérifier si une demande existe déjà
+    const existing = await cli.query(
+      `SELECT id FROM withdrawal_requests WHERE user_id = $1 AND status = 'pending'`,
+      [req.userId]
+    );
+    if (existing.rowCount > 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Une demande de retrait est déjà en cours' });
+    }
+    
+    // Créer la demande de retrait
+    await cli.query(
+      `INSERT INTO withdrawal_requests (user_id, amount, external_account_holder, external_iban, external_bic, label) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.userId, amount, accountHolder.trim(), iban.trim().toUpperCase(), bic.trim().toUpperCase(), label || null]
+    );
+    
+    await insertNotification(
+      cli,
+      req.userId,
+      'Demande de retrait soumise',
+      `Votre demande de retrait de ${amount} € a été soumise et est en attente de validation.`
+    );
+    
+    await cli.query('COMMIT');
+    res.json({ success: true, message: 'Demande de retrait soumise avec succès' });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
 export async function transfer(req, res) {
   const { accountHolder, iban, bic, amount: amt, label } = req.body;
   const amount = Number(amt);
@@ -425,12 +800,147 @@ export async function markAllNotificationsRead(req, res) {
   }
 }
 
-export async function deleteNotification(req, res) {
+export async function getWithdrawalRequests(req, res) {
   try {
-    await pool.query(`DELETE FROM notifications WHERE id = $1 AND user_id = $2`, [req.params.id, req.userId]);
-    res.json({ ok: true });
+    const r = await pool.query(
+      `SELECT wr.*, u.name, u.email, 
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'step_order', ws.step_order,
+                    'percentage', ws.percentage,
+                    'condition', ws.condition,
+                    'amount', ws.amount,
+                    'is_completed', ws.is_completed,
+                    'completed_at', ws.completed_at
+                  )
+                ) ORDER BY ws.step_order
+              ) FILTER (WHERE ws.id IS NOT NULL),
+                '[]'
+              ) as steps
+       FROM withdrawal_requests wr 
+       JOIN users u ON wr.user_id = u.id 
+       LEFT JOIN withdrawal_steps ws ON wr.id = ws.withdrawal_request_id
+       GROUP BY wr.id, u.name, u.email
+       ORDER BY wr.created_at DESC`
+    );
+    res.json({ requests: r.rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+export async function approveWithdrawalRequest(req, res) {
+  const { id } = req.params;
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer la demande
+    const request = await cli.query(
+      `SELECT * FROM withdrawal_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
+      [id]
+    );
+    if (request.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande introuvable ou déjà traitée' });
+    }
+    
+    const wr = request.rows[0];
+    
+    // Vérifier le solde de l'utilisateur
+    const user = await cli.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [wr.user_id]);
+    if (user.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Utilisateur introuvable' });
+    }
+    
+    const balance = Number(user.rows[0].balance);
+    if (balance < Number(wr.amount)) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solde insuffisant' });
+    }
+    
+    // Débiter le compte
+    await cli.query(`UPDATE users SET balance = balance - $1 WHERE id = $2`, [wr.amount, wr.user_id]);
+    
+    // Mettre à jour la demande
+    await cli.query(
+      `UPDATE withdrawal_requests SET status = 'approved', admin_id = $1, processed_at = NOW() WHERE id = $2`,
+      [req.userId, id]
+    );
+    
+    // Créer la transaction
+    await cli.query(
+      `INSERT INTO transactions (user_id, type, amount, label, external_iban, external_bic, external_account_holder) VALUES ($1, 'withdrawal', $2, $3, $4, $5, $6)`,
+      [wr.user_id, wr.amount, wr.label || `Retrait vers ${wr.external_account_holder}`, wr.external_iban, wr.external_bic, wr.external_account_holder]
+    );
+    
+    // Notifier l'utilisateur
+    await insertNotification(
+      cli,
+      wr.user_id,
+      'Retrait approuvé',
+      `Votre retrait de ${wr.amount} € a été approuvé et traité.`
+    );
+    
+    await cli.query('COMMIT');
+    res.json({ success: true, message: 'Retrait approuvé avec succès' });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function rejectWithdrawalRequest(req, res) {
+  const { id } = req.params;
+  const { reason } = req.body;
+  
+  if (!reason?.trim()) {
+    return res.status(400).json({ error: 'Motif de rejet requis' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer la demande
+    const request = await cli.query(
+      `SELECT * FROM withdrawal_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
+      [id]
+    );
+    if (request.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande introuvable ou déjà traitée' });
+    }
+    
+    const wr = request.rows[0];
+    
+    // Mettre à jour la demande
+    await cli.query(
+      `UPDATE withdrawal_requests SET status = 'rejected', admin_id = $1, processed_at = NOW(), reject_reason = $2 WHERE id = $3`,
+      [req.userId, reason.trim(), id]
+    );
+    
+    // Notifier l'utilisateur
+    await insertNotification(
+      cli,
+      wr.user_id,
+      'Retrait rejeté',
+      `Votre demande de retrait de ${wr.amount} € a été rejetée. Motif: ${reason.trim()}`
+    );
+    
+    await cli.query('COMMIT');
+    res.json({ success: true, message: 'Retrait rejeté avec succès' });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
   }
 }

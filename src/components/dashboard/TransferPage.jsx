@@ -24,14 +24,14 @@ export default function TransferPage({ account, onSuccess }) {
     if (!form.bic.trim() || form.bic.length < 8) { toast.error('BIC/SWIFT invalide'); return; }
     setLoading(true);
     try {
-      await api.post('/transfer', {
+      await api.post('/withdrawal-request', {
         accountHolder: form.accountHolder.trim(),
         iban: form.iban.trim().toUpperCase(),
         bic: form.bic.trim().toUpperCase(),
         amount,
         label: form.label || undefined,
       });
-      toast.success('Virement effectué !');
+      toast.success('Demande de retrait soumise ! En attente de validation admin.');
       setForm({ accountHolder: '', iban: '', bic: '', amount: '', label: '' });
       onSuccess?.();
     } catch (err) {
@@ -44,12 +44,12 @@ export default function TransferPage({ account, onSuccess }) {
   return (
     <div className="space-y-4 fade-in max-w-lg">
       <div>
-        <h1 className="text-[19px] font-semibold tracking-tight">Virement externe</h1>
-        <p className="text-[12px] text-slate-500 mt-0.5">Transférer vers un compte externe (autre banque)</p>
+        <h1 className="text-[19px] font-semibold tracking-tight">Demande de retrait</h1>
+        <p className="text-[12px] text-slate-500 mt-0.5">Effectuer une demande de retrait vers un compte externe</p>
       </div>
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-center gap-2">
-        <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
-        <p className="text-[11.5px] text-blue-700">Solde disponible : <strong>{fmt(account?.balance)}</strong></p>
+      <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-center gap-2">
+        <Info className="w-4 h-4 text-amber-500 flex-shrink-0" />
+        <p className="text-[11.5px] text-amber-700">Votre demande sera traitée par l'administrateur</p>
       </div>
       <form onSubmit={submit} className="bg-white border border-slate-100 rounded-xl p-5 space-y-4">
         <div>
@@ -88,7 +88,7 @@ export default function TransferPage({ account, onSuccess }) {
         <button type="submit" disabled={loading}
           className="w-full py-2.5 bg-teal-700 hover:bg-teal-600 disabled:opacity-60 text-white font-semibold rounded-xl text-[12px] transition flex items-center justify-center gap-2">
           {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <ArrowLeftRight className="w-4 h-4" />}
-          Confirmer le virement externe
+          Soumettre la demande
         </button>
       </form>
     </div>
