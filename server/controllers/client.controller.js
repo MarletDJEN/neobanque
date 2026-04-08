@@ -800,6 +800,20 @@ export async function markAllNotificationsRead(req, res) {
   }
 }
 
+export async function deleteNotification(req, res) {
+  try {
+    const { id } = req.params;
+    await pool.query(
+      `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
+      [id, req.userId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
 export async function getWithdrawalRequests(req, res) {
   try {
     const r = await pool.query(
