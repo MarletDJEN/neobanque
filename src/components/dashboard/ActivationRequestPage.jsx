@@ -25,8 +25,15 @@ export default function ActivationRequestPage({ account, onBack, onSuccess }) {
   // Mettre à jour l'étape si les données du compte changent
   useEffect(() => {
     const isIbanApproved = account?.iban && (account?.ibanStatus === 'approved' || account?.ibanStatus === 'active');
-    setCurrentStep(isIbanApproved ? 'transfer_proof' : 'iban_request');
-  }, [account?.iban, account?.ibanStatus]);
+    const newStep = isIbanApproved ? 'transfer_proof' : 'iban_request';
+    
+    // Si l'étape change, notifier l'utilisateur
+    if (currentStep !== newStep && newStep === 'transfer_proof') {
+      toast.success('IBAN approuvé ! Vous pouvez maintenant envoyer la preuve de virement.');
+    }
+    
+    setCurrentStep(newStep);
+  }, [account?.iban, account?.ibanStatus, currentStep]);
 
   const isAccountActivated = account?.status === 'active' && account?.accountVerified && account?.ibanStatus === 'active';
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { api } from '../../services/api';
 import { Upload, CheckCircle, AlertCircle, ArrowLeft, CreditCard, FileText, Clock, AlertTriangle } from 'lucide-react';
@@ -21,6 +21,22 @@ export default function IbanActivationPage({ account, onBack, onSuccess }) {
   };
   
   const [currentStep, setCurrentStep] = useState(getInitialStep);
+
+  // Mettre à jour l'étape si les données du compte changent
+  useEffect(() => {
+    const newStep = getInitialStep();
+    
+    // Notifier les changements d'état
+    if (currentStep !== newStep) {
+      if (newStep === 'completed') {
+        toast.success('IBAN entièrement activé ! Tous les services sont disponibles.');
+      } else if (newStep === 'deposit' && currentStep === 'request') {
+        toast.success('IBAN attribué ! Vous pouvez maintenant effectuer le dépôt.');
+      }
+      
+      setCurrentStep(newStep);
+    }
+  }, [account?.status, account?.accountVerified, account?.ibanStatus, account?.iban, currentStep]);
   const [formData, setFormData] = useState({
     amount: '500',
     proofFile: null,

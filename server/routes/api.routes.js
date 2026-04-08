@@ -63,4 +63,7 @@ router.get('/admin/modal-message', authMiddleware, adminMiddleware, activationCt
 router.post('/admin/modal-message', authMiddleware, adminMiddleware, activationCtl.updateModalMessage);
 router.delete('/admin/modal-message/:id', authMiddleware, adminMiddleware, activationCtl.deactivateModalMessage);
 
+// Route pour la suppression de compte client
+router.delete('/admin/users/:id', authMiddleware, adminMiddleware, adminCtl.deleteUser);
+
 export default router;

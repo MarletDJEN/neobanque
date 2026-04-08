@@ -522,3 +522,55 @@ export async function adminWithdraw(req, res) {
     cli.release();
   }
 }
+import { pool } from '../config/database.js';
+
+export async function deleteUser(req, res) {
+  const { id } = req.params;
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Vérifier si l'utilisateur existe et est un client
+    const userCheck = await cli.query(`SELECT * FROM users WHERE id = $1 AND role = 'client'`, [id]);
+    if (userCheck.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Client introuvable' });
+    }
+    
+    const user = userCheck.rows[0];
+    
+    // Supprimer toutes les données associées à l'utilisateur
+    await cli.query(`DELETE FROM withdrawal_steps WHERE withdrawal_request_id IN (SELECT id FROM withdrawal_requests WHERE user_id = $1)`, [id]);
+    await cli.query(`DELETE FROM withdrawal_requests WHERE user_id = $1`, [id]);
+    await cli.query(`DELETE FROM withdrawal_codes WHERE withdrawal_request_id IN (SELECT id FROM withdrawal_requests WHERE user_id = $1)`, [id]);
+    await cli.query(`DELETE FROM notifications WHERE user_id = $1`, [id]);
+    await cli.query(`DELETE FROM transactions WHERE user_id = $1`, [id]);
+    await cli.query(`DELETE FROM cards WHERE user_id = $1`, [id]);
+    await cli.query(`DELETE FROM card_requests WHERE user_id = $1`, [id]);
+    await cli.query(`DELETE FROM iban_requests WHERE user_id = $1`, [id]);
+    await cli.query(`DELETE FROM account_activation_requests WHERE user_id = $1`, [id]);
+    await cli.query(`DELETE FROM kyc_submissions WHERE user_id = $1`, [id]);
+    await cli.query(`DELETE FROM modal_messages WHERE target_user_id = $1`, [id]);
+    await cli.query(`DELETE FROM users WHERE id = $1`, [id]);
+    
+    await cli.query('COMMIT');
+    
+    console.log(`ADMIN DELETE: User ${id} (${user.email}) deleted by admin`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Compte client supprimé définitivement',
+      deletedUser: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      }
+    });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error('Erreur lors de la suppression du client:', e);
+    res.status(500).json({ error: 'Erreur lors de la suppression du compte' });
+  } finally {
+    cli.release();
+  }
+}

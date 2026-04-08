@@ -8,7 +8,7 @@ import {
   FileText, TrendingUp, Shield, LogOut, CheckCircle,
   XCircle, AlertTriangle, Search, ChevronRight, ChevronLeft,
   Menu, X, Check, Ban, RefreshCw, User, Plus, Minus,
-  MessageSquare, AlertCircle, Upload
+  MessageSquare, AlertCircle, Upload, Trash2
 } from 'lucide-react';
 import TabIbanProofs from '../components/admin/TabIbanProofs';
 import TabWithdrawalRequests from '../components/admin/TabWithdrawalRequests';
@@ -246,6 +246,19 @@ function TabClients({ users, accounts, load }) {
     toast.success('KYC approuvé');
     load();
   };
+  const deleteUser = async (id) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer définitivement ce compte client ?\n\nCette action est irréversible et supprimera toutes les données associées (transactions, cartes, IBAN, etc.).')) {
+      return;
+    }
+    
+    try {
+      await api.delete(`/admin/users/${id}`);
+      toast.success('Compte client supprimé définitivement');
+      load(); // Recharger la liste des utilisateurs
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erreur lors de la suppression');
+    }
+  };
   const assignIban = async (userId) => {
     const f = ibanForm[userId] || {};
     if (!f.iban?.trim() || !f.bic?.trim()) return toast.error('IBAN et BIC requis');
@@ -341,6 +354,9 @@ function TabClients({ users, accounts, load }) {
                 Valider KYC
               </button>
             ) : null}
+            <button type="button" onClick={() => deleteUser(u.id)} className="py-2 bg-red-600 text-white rounded-xl text-[11px] sm:text-[12px] flex items-center justify-center gap-1">
+              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Supprimer
+            </button>
           </div>
         </div>
       </div>

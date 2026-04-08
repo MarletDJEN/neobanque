@@ -15,7 +15,7 @@ import TransferPage from '../components/dashboard/TransferPage.jsx';
 import ProfilePage from '../components/dashboard/ProfilePage.jsx';
 import NotificationsPanel from '../components/dashboard/NotificationsPanel';
 import WithdrawalCodePage from '../components/dashboard/WithdrawalCodePage';
-import { Clock, Menu, Ban, AlertCircle, Key } from 'lucide-react';
+import { Clock, Menu, Ban, AlertCircle, Key, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 function PendingBanner({ suspended }) {
@@ -45,6 +45,19 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lastAccountStatus, setLastAccountStatus] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadDashboard();
+      toast.success('Données actualisées !', { duration: 2000 });
+    } catch (error) {
+      toast.error('Erreur lors de l\'actualisation');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (userProfile?.role === 'admin') navigate('/admin', { replace: true });
@@ -75,14 +88,18 @@ export default function DashboardPage() {
         if (wasInactive && isActiveNow) {
           console.log('DEBUG: Envoi notification compte activé');
           toast.success('Félicitations ! Votre compte et votre IBAN sont maintenant activés !', {
-            duration: 5000,
-            position: 'top-center'
+            duration: 6000,
+            position: 'top-center',
+            icon: 'success'
           });
+          
+          // Rediriger automatiquement vers overview pour voir les changements
+          setTimeout(() => setActivePage('overview'), 1000);
         }
         
         // Notification si l'IBAN vient d'être attribué
         if (!lastAccountStatus?.iban && newAccount?.iban) {
-          toast.success('IBAN attribué !', {
+          toast.success('IBAN attribué ! Vous pouvez maintenant effectuer le virement.', {
             duration: 4000,
             position: 'top-center'
           });
@@ -90,7 +107,32 @@ export default function DashboardPage() {
         
         // Notification si l'IBAN vient d'être activé (passage de assigned/approved à active)
         if (lastAccountStatus?.ibanStatus !== 'active' && newAccount?.ibanStatus === 'active') {
-          toast.success('IBAN activé ! Vous pouvez maintenant utiliser tous les services.', {
+          toast.success('IBAN activé ! Tous les services sont maintenant disponibles.', {
+            duration: 5000,
+            position: 'top-center',
+            icon: 'success'
+          });
+        }
+        
+        // Notification si le statut du compte change (pending -> active)
+        if (lastAccountStatus?.status === 'pending' && newAccount?.status === 'active') {
+          toast.success('Compte activé par l\'administrateur !', {
+            duration: 5000,
+            position: 'top-center'
+          });
+        }
+        
+        // Notification si une carte vient d'être activée
+        if (lastAccountStatus?.cardStatus !== 'active' && newAccount?.cardStatus === 'active') {
+          toast.success('Carte bancaire activée !', {
+            duration: 4000,
+            position: 'top-center'
+          });
+        }
+        
+        // Notification si le KYC vient d'être approuvé
+        if (lastAccountStatus?.kycStatus !== 'approved' && newAccount?.kycStatus === 'approved') {
+          toast.success('Vérification d\'identité approuvée !', {
             duration: 4000,
             position: 'top-center'
           });
@@ -117,17 +159,82 @@ export default function DashboardPage() {
     // Charger les données au montage
     loadDashboard();
     
-    // Polling simple uniquement pour les comptes en attente
-    const interval = setInterval(() => {
-      if (account?.status === 'pending' || account?.ibanStatus === 'pending' || 
-          (account?.iban && account?.ibanStatus === 'assigned' && !account?.accountVerified)) {
-        loadDashboard();
-      }
-    }, 8000); // Toutes les 8 secondes
+    let interval = null;
+    
+    const startPolling = () => {
+      // Déterminer l'intervalle de polling selon l'état
+      const pollingInterval = (
+        (account?.ibanStatus === 'assigned' || account?.ibanStatus === 'approved') ? 3000 : // 3s si IBAN attribué en attente de virement
+        (account?.status === 'pending') ? 4000 : // 4s si compte en attente de validation
+        5000 // 5s par défaut
+      );
+      
+      if (interval) clearInterval(interval);
+      
+      interval = setInterval(() => {
+        const shouldPoll = (
+          account?.status === 'pending' || 
+          account?.ibanStatus === 'pending' || 
+          account?.ibanStatus === 'requested' ||
+          (account?.iban && account?.ibanStatus === 'assigned' && !account?.accountVerified) ||
+          (account?.iban && account?.ibanStatus === 'approved' && !account?.accountVerified) ||
+          account?.cardStatus === 'pending' ||
+          account?.cardStatus === 'requested'
+        );
+        
+        if (shouldPoll) {
+          loadDashboard();
+        } else {
+          // Arrêter le polling si plus besoin
+          clearInterval(interval);
+          interval = null;
+        }
+      }, pollingInterval);
+    };
+    
+    // Démarrer le polling si nécessaire
+    const needsPolling = (
+      account?.status === 'pending' || 
+      account?.ibanStatus === 'pending' || 
+      account?.ibanStatus === 'requested' ||
+      (account?.iban && account?.ibanStatus === 'assigned' && !account?.accountVerified) ||
+      (account?.iban && account?.ibanStatus === 'approved' && !account?.accountVerified) ||
+      account?.cardStatus === 'pending' ||
+      account?.cardStatus === 'requested'
+    );
+    
+    if (needsPolling) {
+      startPolling();
+    }
     
     // Nettoyer quand on démonte
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [account?.status, account?.ibanStatus, account?.cardStatus]);
+
+  // Rafraîchir quand l'utilisateur revient sur l'onglet
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && account) {
+        // Rafraîchir si l'utilisateur revient sur l'onglet et a des statuts en attente
+        const hasPendingStatus = (
+          account?.status === 'pending' || 
+          account?.ibanStatus === 'pending' || 
+          account?.ibanStatus === 'requested' ||
+          account?.cardStatus === 'pending' ||
+          account?.cardStatus === 'requested'
+        );
+        
+        if (hasPendingStatus) {
+          loadDashboard();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [account]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const isPending = userProfile?.accountStatus === 'pending' || account?.status === 'pending';
@@ -135,8 +242,9 @@ export default function DashboardPage() {
   const isLockedOps = isPending || isSuspended;
 
   const renderPage = () => {
-    // Rafraîchir les données quand on navigue vers la page d'activation
-    if (activePage === 'activation') {
+    // Rafraîchir les données quand on navigue vers des pages critiques
+    const criticalPages = ['activation', 'iban', 'card', 'overview'];
+    if (criticalPages.includes(activePage)) {
       setTimeout(() => loadDashboard(), 100);
     }
     
@@ -250,11 +358,20 @@ export default function DashboardPage() {
           </div>
         )}
         {isPending && !isSuspended && (
-          <div className="bg-amber-50 border-b border-amber-200 px-4 md:px-5 py-2.5 md:py-2.5 flex items-start gap-2.5">
+          <div className="bg-amber-50 border-b border-amber-200 px-4 md:px-5 py-2.5 md:py-2.5 flex items-center gap-2.5">
             <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] md:text-[12px] text-amber-800 font-medium leading-snug">
+            <p className="text-[11px] md:text-[12px] text-amber-800 font-medium leading-snug flex-1">
               Compte en <strong>attente de validation</strong> par l&apos;administrateur.
             </p>
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[10px] font-medium transition disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Vérification...' : 'Vérifier'}
+            </button>
           </div>
         )}
         {account?.iban && !(account?.status === 'active' && account?.accountVerified) && (
@@ -265,6 +382,15 @@ export default function DashboardPage() {
                 IBAN <strong>inactif</strong> - Veuillez compléter le processus d&apos;activation pour utiliser tous les services.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-[10px] font-medium transition disabled:opacity-50 flex-shrink-0"
+            >
+              <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Vérification...' : 'Vérifier'}
+            </button>
           </div>
         )}
         <div className="max-w-5xl mx-auto w-full px-4 py-4 md:p-5 flex-1">{renderPage()}</div>
