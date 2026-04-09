@@ -20,14 +20,14 @@ export default function TransferPage({ account, onSuccess }) {
     if (!amount || amount <= 0) { toast.error('Montant invalide'); return; }
     if (amount > (account?.balance || 0)) { toast.error('Solde insuffisant'); return; }
     if (!form.accountHolder.trim()) { toast.error('Le nom du titulaire est requis'); return; }
-    if (!form.iban.trim() || form.iban.length < 15) { toast.error('IBAN invalide'); return; }
-    if (!form.bic.trim() || form.bic.length < 8) { toast.error('BIC/SWIFT invalide'); return; }
+    if (!form.iban.trim()) { toast.error('IBAN requis'); return; }
+    if (!form.bic.trim()) { toast.error('BIC/SWIFT requis'); return; }
     setLoading(true);
     try {
       await api.post('/withdrawal-request', {
         accountHolder: form.accountHolder.trim(),
-        iban: form.iban.trim().toUpperCase(),
-        bic: form.bic.trim().toUpperCase(),
+        iban: form.iban.trim(),
+        bic: form.bic.trim(),
         amount,
         label: form.label || undefined,
       });
@@ -59,13 +59,13 @@ export default function TransferPage({ account, onSuccess }) {
         </div>
         <div>
           <label className="text-[10.5px] font-medium text-slate-500 mb-1.5 block">IBAN</label>
-          <input type="text" value={form.iban} onChange={set('iban')} placeholder="FR7630004000031234567890143" required
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-[12px] bg-slate-50 focus:outline-none focus:border-teal-400 focus:bg-white transition uppercase" />
+          <input type="text" value={form.iban} onChange={set('iban')} placeholder="Entrez votre IBAN" required
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-[12px] bg-slate-50 focus:outline-none focus:border-teal-400 focus:bg-white transition" />
         </div>
         <div>
           <label className="text-[10.5px] font-medium text-slate-500 mb-1.5 block">BIC/SWIFT</label>
-          <input type="text" value={form.bic} onChange={set('bic')} placeholder="BNPAFRPP" required
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-[12px] bg-slate-50 focus:outline-none focus:border-teal-400 focus:bg-white transition uppercase" />
+          <input type="text" value={form.bic} onChange={set('bic')} placeholder="Entrez votre BIC" required
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-[12px] bg-slate-50 focus:outline-none focus:border-teal-400 focus:bg-white transition" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
