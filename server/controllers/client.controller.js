@@ -187,100 +187,12 @@ function generateCode() {
 }
 
 export async function generateWithdrawalCode(req, res) {
-  const { id } = req.params;
-  const { targetPercentage, steps } = req.body;
-  
-  if (!id) {
-    return res.status(400).json({ error: 'ID de demande requis' });
-  }
-  
-  if (!targetPercentage || targetPercentage <= 0 || targetPercentage > 100) {
-    return res.status(400).json({ error: 'Pourcentage cible invalide (1-100)' });
-  }
-  
-  if (!steps || !Array.isArray(steps) || steps.length === 0) {
-    return res.status(400).json({ error: 'Étapes de retrait requises' });
-  }
-  
-  const cli = await pool.connect();
-  try {
-    await cli.query('BEGIN');
-    
-    // Vérifier que la demande existe et est en statut pending
-    const request = await cli.query(
-      `SELECT * FROM withdrawal_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
-      [id]
-    );
-    if (request.rowCount === 0) {
-      await cli.query('ROLLBACK');
-      return res.status(404).json({ error: 'Demande introuvable ou déjà traitée' });
-    }
-    
-    // Valider les étapes
-    let totalPercentage = 0;
-    for (const step of steps) {
-      if (!step.percentage || step.percentage <= 0 || step.percentage > 100) {
-        await cli.query('ROLLBACK');
-        return res.status(400).json({ error: 'Pourcentage d\'étape invalide' });
-      }
-      totalPercentage += step.percentage;
-    }
-    
-    if (totalPercentage !== targetPercentage) {
-      await cli.query('ROLLBACK');
-      return res.status(400).json({ error: 'Le total des pourcentages doit égaler le pourcentage cible' });
-    }
-    
-    // Générer un code unique
-    let code;
-    let codeExists;
-    do {
-      code = generateCode();
-      codeExists = await cli.query(`SELECT id FROM withdrawal_codes WHERE code = $1`, [code]);
-    } while (codeExists.rowCount > 0);
-    
-    // Calculer la date d'expiration (4 heures)
-    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
-    
-    // Insérer le code
-    await cli.query(
-      `INSERT INTO withdrawal_codes (code, withdrawal_request_id, expires_at) VALUES ($1, $2, $3)`,
-      [code, id, expiresAt]
-    );
-    
-    // Insérer les étapes
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
-      const stepAmount = (Number(request.rows[0].amount) * step.percentage) / 100;
-      await cli.query(
-        `INSERT INTO withdrawal_steps (withdrawal_request_id, step_order, percentage, condition, amount) VALUES ($1, $2, $3, $4, $5)`,
-        [id, i + 1, step.percentage, step.condition || null, stepAmount]
-      );
-    }
-    
-    // Mettre à jour la demande
-    await cli.query(
-      `UPDATE withdrawal_requests SET status = 'code_generated', withdrawal_code = $1, code_expires_at = $2, admin_id = $3, target_percentage = $4, next_condition = $5 WHERE id = $6`,
-      [code, expiresAt, req.userId, targetPercentage, steps[0]?.condition || null, id]
-    );
-    
-    // Notifier l'utilisateur
-    await insertNotification(
-      cli,
-      request.rows[0].user_id,
-      'Code de retrait généré',
-      `Un code de retrait a été généré pour votre demande. Valide 4 heures. Première étape: ${steps[0]?.percentage || targetPercentage}%`
-    );
-    
-    await cli.query('COMMIT');
-    res.json({ success: true, code, expiresAt, steps });
-  } catch (e) {
-    await cli.query('ROLLBACK');
-    console.error(e);
-    res.status(500).json({ error: 'Erreur serveur' });
-  } finally {
-    cli.release();
-  }
+  // Les clients ne peuvent plus générer de codes directement
+  // Seul l'administrateur peut générer des codes de retrait
+  return res.status(403).json({ 
+    error: 'Génération de code non autorisée',
+    message: 'Veuillez contacter l\'administrateur pour obtenir un code de retrait. L\'administrateur vous fournira un code avec les conditions de retrait.'
+  });
 }
 
 export async function validateWithdrawalCode(req, res) {
