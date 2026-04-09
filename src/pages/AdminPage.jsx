@@ -197,7 +197,7 @@ function TabOverview({ users, totalBalance, pendingIban, pendingCards, pendingAc
         ].map((s, i) => {
           const Icon = s.icon;
           return (
-            <div className="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4">
+            <div key={i} className="bg-white border border-slate-100 rounded-2xl p-3 sm:p-4">
               <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center mb-2 sm:mb-3 ${s.color}`}>
                 <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
