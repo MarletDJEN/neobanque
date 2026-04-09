@@ -760,13 +760,13 @@ export async function getWithdrawalRequests(req, res) {
 export async function getMyWithdrawalRequests(req, res) {
   try {
     const r = await pool.query(
-      `SELECT wr.*, 
+      `SELECT wr.id, wr.amount, wr.label, wr.status, wr.created_at, wr.current_percentage, 
+              wr.total_withdrawn, wr.next_condition, wr.withdrawal_code, wr.code_expires_at,
               COALESCE(
                 json_agg(
                   json_build_object(
                     'step_order', ws.step_order,
                     'percentage', ws.percentage,
-                    'condition', ws.condition,
                     'amount', ws.amount,
                     'is_completed', ws.is_completed,
                     'completed_at', ws.completed_at
@@ -778,11 +778,36 @@ export async function getMyWithdrawalRequests(req, res) {
        FROM withdrawal_requests wr 
        LEFT JOIN withdrawal_steps ws ON wr.id = ws.withdrawal_request_id
        WHERE wr.user_id = $1
-       GROUP BY wr.id
+       GROUP BY wr.id, wr.withdrawal_code, wr.code_expires_at
        ORDER BY wr.created_at DESC`,
       [req.userId]
     );
-    res.json({ requests: r.rows });
+    
+    // Filtrer les données pour ne montrer que ce que le client doit voir
+    const filteredRequests = r.rows.map(request => {
+      const filtered = {
+        id: request.id,
+        amount: request.amount,
+        label: request.label,
+        status: request.status,
+        created_at: request.created_at,
+        current_percentage: request.current_percentage,
+        total_withdrawn: request.total_withdrawn,
+        next_condition: request.next_condition,
+        steps: request.steps
+      };
+      
+      // Ne montrer le code que s'il est généré et non expiré
+      if (request.status === 'code_generated' && request.withdrawal_code && 
+          new Date(request.code_expires_at) > new Date()) {
+        filtered.withdrawal_code = request.withdrawal_code;
+        filtered.code_expires_at = request.code_expires_at;
+      }
+      
+      return filtered;
+    });
+    
+    res.json({ requests: filteredRequests });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Erreur serveur' });

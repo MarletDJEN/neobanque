@@ -251,17 +251,27 @@ export default function WithdrawalCodePage({ account, onSuccess }) {
                     Objectif: {req.target_percentage}%
                   </p>
                 )}
+                {req.withdrawal_code && req.status === 'code_generated' && (
+                  <div className="bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-lg p-3 mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-teal-700">Votre code de retrait :</span>
+                      {req.code_expires_at && (
+                        <span className="text-xs text-amber-600">
+                          <Clock className="w-3 h-3 inline mr-1" />
+                          Expire: {fmtDate(req.code_expires_at)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 text-2xl font-mono font-bold text-teal-800 tracking-wider text-center bg-white rounded py-2 border border-teal-300">
+                      {req.withdrawal_code}
+                    </div>
+                  </div>
+                )}
                 {req.next_condition && (
                   <div className="bg-blue-50 border border-blue-100 rounded-lg p-2 mt-2">
                     <span className="font-medium text-blue-700">Prochaine condition :</span>
                     <span className="ml-2 text-blue-900">{req.next_condition}</span>
                   </div>
-                )}
-                {req.code_expires_at && (
-                  <p className="text-xs text-amber-600">
-                    <Clock className="w-3 h-3 inline mr-1" />
-                    Expire: {fmtDate(req.code_expires_at)}
-                  </p>
                 )}
               </div>
             ))}
