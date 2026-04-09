@@ -8,15 +8,32 @@ const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency:
 export default function IbanActivationPage({ account, onBack, onSuccess }) {
   // Déterminer l'étape initiale
   const getInitialStep = () => {
-    // Si le compte est fully activé, aller directement à l'étape terminée
+    // Debug pour voir les valeurs reçues
+    console.log('DEBUG IbanActivationPage:', {
+      status: account?.status,
+      accountVerified: account?.accountVerified,
+      ibanStatus: account?.ibanStatus,
+      iban: account?.iban,
+      bic: account?.bic
+    });
+    
+    // Si le compte est fully activé (IBAN actif ET virement validé), aller directement à l'étape terminée
     if (account?.status === 'active' && account?.accountVerified && account?.ibanStatus === 'active') {
+      console.log('DEBUG: Going to completed step');
       return 'completed';
     }
-    // Si l'IBAN est déjà attribué mais pas encore actif, aller à l'étape de dépôt
+    // Si l'IBAN est déjà attribué/approuvé mais pas encore actif, aller à l'étape de dépôt
     if (account?.iban && (account?.ibanStatus === 'assigned' || account?.ibanStatus === 'approved')) {
+      console.log('DEBUG: Going to deposit step (assigned/approved)');
+      return 'deposit';
+    }
+    // Si l'IBAN est actif mais le compte pas encore vérifié (pas de virement), rester sur dépôt
+    if (account?.iban && account?.ibanStatus === 'active' && !account?.accountVerified) {
+      console.log('DEBUG: Going to deposit step (active but not verified)');
       return 'deposit';
     }
     // Sinon, demander l'IBAN
+    console.log('DEBUG: Going to request step');
     return 'request';
   };
   
@@ -284,7 +301,7 @@ export default function IbanActivationPage({ account, onBack, onSuccess }) {
           </button>
           <div>
             <h1 className="text-[19px] font-semibold tracking-tight">Activation IBAN</h1>
-            <p className="text-[12px] text-slate-500 mt-0.5">Processus terminé</p>
+            <p className="text-[12px] text-slate-500 mt-0.5">Processus terminé avec succès</p>
           </div>
         </div>
 
@@ -292,16 +309,31 @@ export default function IbanActivationPage({ account, onBack, onSuccess }) {
           <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
-          <h3 className="font-semibold text-[16px] text-green-800 mb-2">IBAN activé !</h3>
+          <h3 className="font-semibold text-[16px] text-green-800 mb-2">🎉 Félicitations ! Votre IBAN est actif</h3>
           <p className="text-[13px] text-green-700 mb-4 max-w-sm mx-auto">
-            Votre IBAN est maintenant complètement actif. Vous pouvez recevoir des virements.
+            Votre compte et votre IBAN sont maintenant entièrement activés. Vous pouvez utiliser tous les services bancaires.
           </p>
-          <div className="bg-white border border-green-100 rounded-lg p-4">
-            <p className="text-[11px] font-mono text-slate-800">
-              {account?.iban}
-            </p>
-            <p className="text-[10px] text-slate-500 mt-1">
-              BIC: {account?.bic || 'BNPAFRPPXXX'}
+          
+          <div className="bg-white border border-green-100 rounded-lg p-4 mb-4">
+            <div className="text-left space-y-3">
+              <div>
+                <p className="text-[10px] text-slate-500 font-medium mb-1">VOTRE IBAN</p>
+                <p className="text-[14px] font-mono text-slate-800 font-semibold">
+                  {account?.iban || 'Non disponible'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 font-medium mb-1">BIC</p>
+                <p className="text-[13px] font-mono text-slate-800">
+                  {account?.bic || 'BNPAFRPPXXX'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+            <p className="text-[11px] text-blue-800">
+              <strong>Services disponibles :</strong> Virements entrants/sortants, Carte bancaire, Consultation de solde
             </p>
           </div>
         </div>

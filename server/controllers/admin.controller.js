@@ -18,11 +18,13 @@ function mapUserAdminRow(row) {
     iban: row.iban,
     bic: row.bic,
     ibanStatus:
-      row.iban_status === 'assigned'
-        ? 'approved'
-        : row.iban_status === 'requested'
-          ? 'pending'
-          : 'none',
+      row.iban_status === 'active'
+        ? 'active'
+        : row.iban_status === 'assigned'
+          ? 'approved'
+          : row.iban_status === 'requested'
+            ? 'pending'
+            : 'none',
     status: row.status,
     accountVerified: row.account_verified,
   };

@@ -1,5 +1,6 @@
 /** Statut IBAN côté client (UI existante) */
 export function ibanStatusToClient(ibanStatus) {
+  if (ibanStatus === 'active') return 'active';
   if (ibanStatus === 'assigned') return 'approved';
   if (ibanStatus === 'requested') return 'pending';
   return 'none';
