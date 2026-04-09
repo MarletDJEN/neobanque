@@ -718,33 +718,36 @@ export async function deleteNotification(req, res) {
 export async function getWithdrawalRequests(req, res) {
   try {
     console.log('DEBUG: getWithdrawalRequests appelé par admin:', req.userId);
-    const r = await pool.query(
-      `SELECT wr.*, u.name, u.email, 
-              COALESCE(
-                (
-                  SELECT json_agg(
-                    json_build_object(
-                      'step_order', ws.step_order,
-                      'percentage', ws.percentage,
-                      'condition', ws.condition,
-                      'amount', ws.amount,
-                      'is_completed', ws.is_completed,
-                      'completed_at', ws.completed_at
-                    )
-                  )
-                  FROM withdrawal_steps ws 
-                  WHERE ws.withdrawal_request_id = wr.id 
-                  ORDER BY ws.step_order
-                ),
-                '[]'
-              ) as steps
+    
+    // Récupérer d'abord les demandes de retrait
+    const requestsQuery = await pool.query(
+      `SELECT wr.*, u.name, u.email 
        FROM withdrawal_requests wr 
        JOIN users u ON wr.user_id = u.id 
        ORDER BY wr.created_at DESC`
     );
-    console.log('DEBUG: Nombre de demandes trouvées:', r.rowCount);
-    console.log('DEBUG: Demandes:', r.rows);
-    res.json({ requests: r.rows });
+    
+    // Pour chaque demande, récupérer les étapes associées
+    const requestsWithSteps = await Promise.all(
+      requestsQuery.rows.map(async (request) => {
+        const stepsQuery = await pool.query(
+          `SELECT step_order, percentage, condition, amount, is_completed, completed_at 
+           FROM withdrawal_steps 
+           WHERE withdrawal_request_id = $1 
+           ORDER BY step_order`,
+          [request.id]
+        );
+        
+        return {
+          ...request,
+          steps: stepsQuery.rows
+        };
+      })
+    );
+    
+    console.log('DEBUG: Nombre de demandes trouvées:', requestsWithSteps.length);
+    console.log('DEBUG: Demandes:', requestsWithSteps);
+    res.json({ requests: requestsWithSteps });
   } catch (e) {
     console.error('Erreur dans getWithdrawalRequests:', e);
     res.status(500).json({ error: 'Erreur lors du chargement des demandes de retrait' });
