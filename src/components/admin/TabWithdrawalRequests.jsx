@@ -208,7 +208,7 @@ export default function TabWithdrawalRequests() {
               {req.current_percentage && (
                 <div className="text-xs text-purple-600">
                   <Percent className="w-3 h-3 inline mr-1" />
-                  Progression: {req.current_percentage.toFixed(1)}% ({fmt(req.total_withdrawn)})
+                  Progression: {typeof req.current_percentage === 'number' ? req.current_percentage.toFixed(1) : req.current_percentage}% ({fmt(req.total_withdrawn)})
                 </div>
               )}
               {req.target_percentage && (
