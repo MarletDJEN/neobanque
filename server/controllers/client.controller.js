@@ -744,54 +744,8 @@ export async function getWithdrawalRequests(req, res) {
     console.log('DEBUG: Demandes:', r.rows);
     res.json({ requests: r.rows });
   } catch (e) {
-    console.error('DEBUG: Erreur dans getWithdrawalRequests, utilisation des données de test:', e);
-    // Données de test quand la BDD n'est pas accessible
-    const testRequests = [
-      {
-        id: 'test-1',
-        user_id: 'test-user-1',
-        amount: 1500,
-        external_account_holder: 'Jean Dupont',
-        external_iban: 'TEST12345678901234567890',
-        external_bic: 'TESTBIC',
-        label: 'Test withdrawal 1',
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        name: 'Jean Dupont',
-        email: 'jean.dupont@test.com',
-        steps: []
-      },
-      {
-        id: 'test-2',
-        user_id: 'test-user-2',
-        amount: 800,
-        external_account_holder: 'Marie Martin',
-        external_iban: 'DEMO12345678901234567890',
-        external_bic: 'DEMOBIC',
-        label: 'Test withdrawal 2',
-        status: 'code_generated',
-        created_at: new Date(Date.now() - 3600000).toISOString(),
-        name: 'Marie Martin',
-        email: 'marie.martin@test.com',
-        withdrawal_code: 'TEST12345',
-        code_expires_at: new Date(Date.now() + 3600000).toISOString(),
-        target_percentage: 70,
-        current_percentage: 0,
-        total_withdrawn: 0,
-        next_condition: 'Première condition de test',
-        steps: [
-          {
-            step_order: 1,
-            percentage: 70,
-            amount: 560,
-            condition: 'Première condition de test',
-            is_completed: false,
-            completed_at: null
-          }
-        ]
-      }
-    ];
-    res.json({ requests: testRequests });
+    console.error('Erreur dans getWithdrawalRequests:', e);
+    res.status(500).json({ error: 'Erreur lors du chargement des demandes de retrait' });
   }
 }
 
