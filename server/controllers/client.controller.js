@@ -404,15 +404,7 @@ export async function createWithdrawalRequest(req, res) {
     return res.status(400).json({ error: 'Informations du bénéficiaire et montant requis' });
   }
   
-  // Validation basique de l'IBAN
-  if (!/^[A-Z]{2}/.test(iban.trim().toUpperCase()) || iban.trim().length < 15) {
-    return res.status(400).json({ error: 'IBAN invalide' });
-  }
-  
-  // Validation basique du BIC
-  if (!/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic.trim().toUpperCase())) {
-    return res.status(400).json({ error: 'BIC/SWIFT invalide' });
-  }
+  // Pas de validation stricte - le client peut saisir les caractères qu'il veut pour l'IBAN et BIC
   
   const cli = await pool.connect();
   try {
@@ -442,7 +434,7 @@ export async function createWithdrawalRequest(req, res) {
     // Créer la demande de retrait
     await cli.query(
       `INSERT INTO withdrawal_requests (user_id, amount, external_account_holder, external_iban, external_bic, label) VALUES ($1, $2, $3, $4, $5, $6)`,
-      [req.userId, amount, accountHolder.trim(), iban.trim().toUpperCase(), bic.trim().toUpperCase(), label || null]
+      [req.userId, amount, accountHolder.trim(), iban.trim(), bic.trim(), label || null]
     );
     
     await insertNotification(
@@ -470,15 +462,7 @@ export async function transfer(req, res) {
     return res.status(400).json({ error: 'Informations du bénéficiaire et montant requis' });
   }
   
-  // Validation basique de l'IBAN (doit commencer par 2 lettres et faire au moins 15 caractères)
-  if (!/^[A-Z]{2}/.test(iban.trim().toUpperCase()) || iban.trim().length < 15) {
-    return res.status(400).json({ error: 'IBAN invalide' });
-  }
-  
-  // Validation basique du BIC (8 ou 11 caractères alphanumériques)
-  if (!/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic.trim().toUpperCase())) {
-    return res.status(400).json({ error: 'BIC/SWIFT invalide' });
-  }
+  // Pas de validation stricte - le client peut saisir les caractères qu'il veut pour l'IBAN et BIC
   
   const cli = await pool.connect();
   try {
@@ -499,7 +483,7 @@ export async function transfer(req, res) {
     const lbl = label || `Virement externe vers ${accountHolder.trim()}`;
     await cli.query(
       `INSERT INTO transactions (user_id, type, amount, label, external_iban, external_bic, external_account_holder) VALUES ($1, 'withdrawal', $2, $3, $4, $5, $6)`,
-      [req.userId, amount, lbl, iban.trim().toUpperCase(), bic.trim().toUpperCase(), accountHolder.trim()]
+      [req.userId, amount, lbl, iban.trim(), bic.trim(), accountHolder.trim()]
     );
     
     await cli.query('COMMIT');
