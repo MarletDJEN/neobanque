@@ -721,23 +721,25 @@ export async function getWithdrawalRequests(req, res) {
     const r = await pool.query(
       `SELECT wr.*, u.name, u.email, 
               COALESCE(
-                json_agg(
-                  json_build_object(
-                    'step_order', ws.step_order,
-                    'percentage', ws.percentage,
-                    'condition', ws.condition,
-                    'amount', ws.amount,
-                    'is_completed', ws.is_completed,
-                    'completed_at', ws.completed_at
+                (
+                  SELECT json_agg(
+                    json_build_object(
+                      'step_order', ws.step_order,
+                      'percentage', ws.percentage,
+                      'condition', ws.condition,
+                      'amount', ws.amount,
+                      'is_completed', ws.is_completed,
+                      'completed_at', ws.completed_at
+                    )
                   )
-                ) ORDER BY ws.step_order
-              ) FILTER (WHERE ws.id IS NOT NULL),
+                  FROM withdrawal_steps ws 
+                  WHERE ws.withdrawal_request_id = wr.id 
+                  ORDER BY ws.step_order
+                ),
                 '[]'
               ) as steps
        FROM withdrawal_requests wr 
        JOIN users u ON wr.user_id = u.id 
-       LEFT JOIN withdrawal_steps ws ON wr.id = ws.withdrawal_request_id
-       GROUP BY wr.id, u.name, u.email
        ORDER BY wr.created_at DESC`
     );
     console.log('DEBUG: Nombre de demandes trouvées:', r.rowCount);
