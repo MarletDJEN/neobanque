@@ -1,0 +1,9 @@
+# Secrets & environnement
+.env
+.env.local
+.env.*.local
+
+# Dépendances & build
+node_modules
+dist
+*.local
