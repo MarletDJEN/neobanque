@@ -629,97 +629,7 @@ export async function approveWithdrawalRequest(req, res) {
       return res.status(404).json({ error: 'Demande introuvable ou déjà traitée' });
     }
     
-    // Mettre à jour la demande avec les paliers et délai de 24h
-    const firstStepTime = new Date(Date.now() + 24 * 60 * 60 * 1000); //24 heures à partir de maintenant
-    await cli.query(
-      `UPDATE withdrawal_requests SET status = 'code_generated', admin_id = $1, target_percentage = $2, next_condition = $3, code_expires_at = $4 WHERE id = $5`,
-      [req.userId, finalTargetPercentage, finalSteps[0]?.condition || null, firstStepTime, id]
-    );
-    
-    // Supprimer les étapes existantes pour cette demande (au cas où)
-    await cli.query(
-      `DELETE FROM withdrawal_steps WHERE withdrawal_request_id = $1`,
-      [id]
-    );
-    
-    // Insérer les nouvelles étapes
-    for (let i = 0; i < finalSteps.length; i++) {
-      const step = finalSteps[i];
-      const stepAmount = (Number(request.rows[0].amount) * step.percentage) / 100;
-      await cli.query(
-        `INSERT INTO withdrawal_steps (withdrawal_request_id, step_order, percentage, condition, amount) VALUES ($1, $2, $3, $4, $5)`,
-        [id, i + 1, step.percentage, step.condition || null, stepAmount]
-      );
-    }
-    
-    // Notifier l'utilisateur
-    await insertNotification(
-      cli,
-      request.rows[0].user_id,
-      'Demande de virement approuvée',
-      `Votre demande de virement a été approuvée avec ${finalSteps.length} palier(s). Le premier code sera disponible dans 24h.`
-    );
-    
-    await cli.query('COMMIT');
-    
-    console.log(`ADMIN WITHDRAWAL: Request ${id} approved by admin ${req.userId} with ${finalSteps.length} steps`);
-    
-    res.json({ 
-      success: true, 
-      message: 'Demande approuvée avec succès',
-      targetPercentage: finalTargetPercentage,
-      steps: finalSteps,
-      withdrawalId: id
-    });
-  } catch (e) {
-    await cli.query('ROLLBACK');
-    console.error('Erreur lors de l\'approbation de la demande:', e);
-    res.status(500).json({ error: 'Erreur lors de l\'approbation de la demande' });
-  } finally {
-    cli.release();
-  }
-}
-
-export async function generateAndSendWithdrawalCode(req, res) {
-  const { id } = req.params;
-  const { stepOrder, clientType } = req.body;
-  
-  if (!id) {
-    return res.status(400).json({ error: 'ID de demande requis' });
-  }
-  
-  if (!stepOrder || stepOrder <= 0) {
-    return res.status(400).json({ error: 'Numéro d\'étape requis' });
-  }
-  
-  if (!clientType) {
-    return res.status(400).json({ error: 'Type de client requis' });
-  }
-  
-  const cli = await pool.connect();
-  try {
-    await cli.query('BEGIN');
-    
-    // Récupérer la demande et l'étape spécifique
-    const request = await cli.query(
-      `SELECT wr.*, ws.percentage as step_percentage, ws.condition as step_condition, wr.code_expires_at, u.email, u.name
-       FROM withdrawal_requests wr 
-       LEFT JOIN withdrawal_steps ws ON wr.id = ws.withdrawal_request_id AND ws.step_order = $1
-       LEFT JOIN users u ON wr.user_id = u.id
-       WHERE wr.id = $2 AND wr.status IN ('code_generated', 'step_completed')
-       FOR UPDATE OF wr`,
-      [stepOrder, id]
-    );
-    if (request.rowCount === 0) {
-      await cli.query('ROLLBACK');
-      return res.status(404).json({ error: 'Demande introuvable, étape non disponible ou demande pas encore approuvée' });
-    }
-    
-    // Vérifier si le délai de 24h est écoulé pour la première étape
-    if (stepOrder === 1 && request.rows[0].code_expires_at && new Date() < new Date(request.rows[0].code_expires_at)) {
-      await cli.query('ROLLBACK');
-      return res.status(400).json({ error: 'Le délai de 24h n\'est pas encore écoulé. Veuillez attendre avant de générer le code.' });
-    }
+    // Plus de délai d'attente - génération immédiate des codes autorisée
     
     // Vérifier si cette étape n'est pas déjà complétée
     const stepCompleted = await cli.query(
@@ -841,11 +751,7 @@ export async function generateWithdrawalCode(req, res) {
       return res.status(404).json({ error: 'Demande introuvable, étape non disponible ou demande pas encore approuvée' });
     }
     
-    // Vérifier si le délai de 24h est écoulé pour la première étape
-    if (stepOrder === 1 && request.rows[0].code_expires_at && new Date() < new Date(request.rows[0].code_expires_at)) {
-      await cli.query('ROLLBACK');
-      return res.status(400).json({ error: 'Le délai de 24h n\'est pas encore écoulé. Veuillez attendre avant de générer le code.' });
-    }
+    // Plus de délai d'attente - génération immédiate des codes autorisée
     
     // Vérifier si cette étape n'est pas déjà complétée
     const stepCompleted = await cli.query(
