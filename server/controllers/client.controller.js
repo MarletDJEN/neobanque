@@ -959,3 +959,108 @@ export async function rejectWithdrawalRequest(req, res) {
     cli.release();
   }
 }
+
+export async function submitWithdrawalCode(req, res) {
+  const { id } = req.params;
+  const { code } = req.body;
+  
+  if (!code || !code.trim()) {
+    return res.status(400).json({ error: 'Code requis' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer la demande et vérifier qu'elle appartient à l'utilisateur
+    const request = await cli.query(
+      `SELECT wr.*, ws.step_order, ws.percentage as step_percentage, ws.amount as step_amount
+       FROM withdrawal_requests wr 
+       LEFT JOIN withdrawal_steps ws ON wr.id = ws.withdrawal_request_id AND ws.is_completed = false
+       WHERE wr.id = $1 AND wr.user_id = $2 AND wr.status = 'code_generated'
+       FOR UPDATE OF wr`,
+      [id, req.userId]
+    );
+    
+    if (request.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande introuvable ou pas encore prête pour le code' });
+    }
+    
+    // Vérifier le code
+    const codeCheck = await cli.query(
+      `SELECT id, expires_at FROM withdrawal_codes 
+       WHERE code = $1 AND withdrawal_request_id = $2 AND is_used = false`,
+      [code.trim().toUpperCase(), id]
+    );
+    
+    if (codeCheck.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Code invalide ou déjà utilisé' });
+    }
+    
+    // Vérifier si le code n'est pas expiré
+    if (new Date() > new Date(codeCheck.rows[0].expires_at)) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Code expiré' });
+    }
+    
+    const wr = request.rows[0];
+    const currentStep = wr.step_order || 1;
+    const stepAmount = wr.step_amount || (Number(wr.amount) * Number(wr.step_percentage || 100)) / 100;
+    
+    // Marquer le code comme utilisé
+    await cli.query(
+      `UPDATE withdrawal_codes SET is_used = true, used_at = NOW() WHERE id = $1`,
+      [codeCheck.rows[0].id]
+    );
+    
+    // Marquer l'étape comme complétée
+    if (wr.step_order) {
+      await cli.query(
+        `UPDATE withdrawal_steps SET is_completed = true, completed_at = NOW() 
+         WHERE withdrawal_request_id = $1 AND step_order = $2`,
+        [id, currentStep]
+      );
+    }
+    
+    // Mettre à jour la demande
+    const newTotalWithdrawn = Number(wr.total_withdrawn || 0) + stepAmount;
+    const newPercentage = (newTotalWithdrawn / Number(wr.amount)) * 100;
+    
+    await cli.query(
+      `UPDATE withdrawal_requests 
+       SET status = 'step_completed', 
+           current_percentage = $1, 
+           total_withdrawn = $2,
+           next_condition = 'En attente de décision admin'
+       WHERE id = $3`,
+      [newPercentage, newTotalWithdrawn, id]
+    );
+    
+    // Notifier l'admin
+    await insertNotification(
+      cli,
+      null, // Notification admin (userId null pour admin)
+      `Étape de virement complétée`,
+      `Le client a validé l'étape ${currentStep} du virement de ${stepAmount.toFixed(2)}EUR vers ${wr.external_account_holder}`
+    );
+    
+    await cli.query('COMMIT');
+    
+    res.json({ 
+      success: true, 
+      message: 'Code validé avec succès',
+      stepCompleted: currentStep,
+      newPercentage: newPercentage.toFixed(1),
+      nextStepAmount: Number(wr.amount) - newTotalWithdrawn
+    });
+    
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error('Erreur lors de la soumission du code:', e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
