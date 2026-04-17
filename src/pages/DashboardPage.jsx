@@ -163,11 +163,13 @@ export default function DashboardPage() {
     let interval = null;
     
     const startPolling = () => {
-      // Déterminer l'intervalle de polling selon l'état
+      // Intervalle plus court pour une meilleure réactivité
       const pollingInterval = (
-        (account?.ibanStatus === 'assigned' || account?.ibanStatus === 'approved') ? 3000 : // 3s si IBAN attribué en attente de virement
-        (account?.status === 'pending') ? 4000 : // 4s si compte en attente de validation
-        5000 // 5s par défaut
+        (account?.ibanStatus === 'assigned' || account?.ibanStatus === 'approved') ? 2000 : // 2s si IBAN attribué en attente de virement
+        (account?.status === 'pending') ? 3000 : // 3s si compte en attente de validation
+        (account?.ibanStatus === 'pending' || account?.ibanStatus === 'requested') ? 2500 : // 2.5s si IBAN en attente
+        (account?.cardStatus === 'pending' || account?.cardStatus === 'requested') ? 2500 : // 2.5s si carte en attente
+        4000 // 4s par défaut (plus réactif)
       );
       
       if (interval) clearInterval(interval);
@@ -184,16 +186,22 @@ export default function DashboardPage() {
         );
         
         if (shouldPoll) {
+          console.log('Polling automatique des données...', { 
+            status: account?.status, 
+            ibanStatus: account?.ibanStatus,
+            cardStatus: account?.cardStatus 
+          });
           loadDashboard();
         } else {
           // Arrêter le polling si plus besoin
+          console.log('Arrêt du polling automatique - compte complètement activé');
           clearInterval(interval);
           interval = null;
         }
       }, pollingInterval);
     };
     
-    // Démarrer le polling si nécessaire
+    // Démarrer le polling immédiatement si nécessaire
     const needsPolling = (
       account?.status === 'pending' || 
       account?.ibanStatus === 'pending' || 
@@ -204,15 +212,20 @@ export default function DashboardPage() {
       account?.cardStatus === 'requested'
     );
     
+    console.log('Configuration du polling automatique:', { needsPolling, account });
+    
     if (needsPolling) {
       startPolling();
     }
     
-    // Nettoyer quand on démonte
+    // Nettoyage au démontage
     return () => {
-      if (interval) clearInterval(interval);
+      if (interval) {
+        console.log('Nettoyage du polling automatique');
+        clearInterval(interval);
+      }
     };
-  }, [account?.status, account?.ibanStatus, account?.cardStatus]);
+  }, [account, loadDashboard]);
 
   // Rafraîchir quand l'utilisateur revient sur l'onglet
   useEffect(() => {
@@ -228,7 +241,12 @@ export default function DashboardPage() {
         );
         
         if (hasPendingStatus) {
+          console.log('Utilisateur revenu sur l\'onglet - rafraîchissement des données');
           loadDashboard();
+          toast.success('Vérification des mises à jour...', { 
+            duration: 2000, 
+            position: 'bottom-center' 
+          });
         }
       }
     };
@@ -236,6 +254,20 @@ export default function DashboardPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [account]);
+
+  // Ajouter un raccourci clavier pour rafraîchir
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Ctrl+R ou Cmd+R pour rafraîchir manuellement
+      if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        handleManualRefresh();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const isPending = userProfile?.accountStatus === 'pending' || account?.status === 'pending';
@@ -362,9 +394,12 @@ export default function DashboardPage() {
         )}
         {isPending && !isSuspended && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 md:px-5 py-2.5 md:py-2.5 flex items-center gap-2.5">
-            <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5 animate-pulse" />
             <p className="text-[11px] md:text-[12px] text-amber-800 font-medium leading-snug flex-1">
               Compte en <strong>attente de validation</strong> par l&apos;administrateur.
+              <span className="text-amber-600 text-[10px] block mt-0.5">
+                Mise à jour automatique toutes les 3 secondes...
+              </span>
             </p>
             <button
               type="button"
@@ -383,6 +418,9 @@ export default function DashboardPage() {
             <div className="flex-1 min-w-0">
               <p className="text-[11px] md:text-[12px] text-blue-800 font-medium leading-snug animate-pulse">
                 IBAN <strong>inactif</strong> - Veuillez compléter le processus d&apos;activation pour utiliser tous les services.
+                <span className="text-blue-600 text-[10px] block mt-0.5">
+                  Vérification automatique toutes les 2 secondes...
+                </span>
               </p>
             </div>
             <button
