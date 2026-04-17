@@ -11,6 +11,7 @@ import {
   MessageSquare, AlertCircle, Upload, Trash2
 } from 'lucide-react';
 import TabIbanProofs from '../components/admin/TabIbanProofs';
+import TabIbanRequests from '../components/admin/TabIbanRequests';
 import TabWithdrawalRequests from '../components/admin/TabWithdrawalRequests';
 
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
@@ -38,6 +39,7 @@ const TABS = [
   { id: 'overview', label: 'Aperçu', icon: LayoutDashboard },
   { id: 'clients', label: 'Comptes Clients', icon: Users },
   { id: 'requests', label: 'Demandes', icon: FileText },
+  { id: 'iban-requests', label: 'Demandes IBAN', icon: Globe },
   { id: 'withdrawal-requests', label: 'Retraits', icon: ArrowLeftRight },
   { id: 'cards', label: 'Cartes', icon: CreditCard },
   { id: 'transactions', label: 'Transactions', icon: TrendingUp },
@@ -165,6 +167,7 @@ export default function AdminPage() {
               {tab === 'overview' && <TabOverview {...shared} totalBalance={totalBalance} pendingIban={pendingIban} pendingCards={pendingCards} pendingAccounts={pendingAccounts} pendingKyc={pendingKyc} pendingActivations={pendingActivations} />}
               {tab === 'clients' && <TabClients {...shared} />}
               {tab === 'requests' && <TabRequests {...shared} />}
+              {tab === 'iban-requests' && <TabIbanRequests {...shared} />}
               {tab === 'withdrawal-requests' && <TabWithdrawalRequests {...shared} />}
               {tab === 'cards' && <TabCards {...shared} />}
               {tab === 'transactions' && <TabTx {...shared} />}

@@ -268,8 +268,8 @@ export async function assignIban(req, res) {
     return res.status(400).json({ error: 'IBAN requis' });
   }
   
-  // Nettoyer l'IBAN (enlever les espaces et mettre en majuscules)
-  const cleanIban = iban.replace(/\s/g, '').toUpperCase();
+  // Garder l'IBAN exactement comme entré par l'admin
+  const cleanIban = iban.trim();
   
   const finalBic = bic?.trim() || 'BNPAFRPPXXX';
   

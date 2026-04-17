@@ -91,15 +91,14 @@ function TabIbanProofs({ users, requests, load }) {
       return;
     }
     
-    // Validation simple de l'IBAN
-    if (iban.length < 15 || iban.length > 34) {
-      toast.error('IBAN invalide (doit contenir entre 15 et 34 caractères)');
+    // Validation minimale - seulement vérifier que ce n'est pas vide
+    if (iban.length < 5) {
+      toast.error('IBAN trop court (minimum 5 caractères)');
       return;
     }
     
-    // Validation simple du BIC
-    if (bic.length < 8 || bic.length > 11) {
-      toast.error('BIC invalide (doit contenir entre 8 et 11 caractères)');
+    if (bic.length < 3) {
+      toast.error('BIC trop court (minimum 3 caractères)');
       return;
     }
     
@@ -151,7 +150,10 @@ function TabIbanProofs({ users, requests, load }) {
       {/* Formulaire d'attribution manuelle */}
       {showManualForm && (
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
-          <h3 className="text-[14px] font-semibold mb-3">Attribution manuelle d'IBAN/BIC</h3>
+          <h3 className="text-[14px] font-semibold mb-2">🏦 Attribution personnalisée d'IBAN/BIC</h3>
+          <p className="text-[11px] text-slate-600 mb-4">
+            Entrez n'importe quel IBAN et BIC personnalisés. Les caractères seront conservés exactement comme saisis.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {users.filter(u => !u.iban || u.iban_status !== 'active').map(user => (
               <div key={user.id} className="bg-white border border-slate-100 rounded-lg p-3">
@@ -163,32 +165,40 @@ function TabIbanProofs({ users, requests, load }) {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="IBAN (ex: FR7630006000011234567890189)"
-                    value={manualIban[user.id]?.iban || ''}
-                    onChange={(e) => setManualIban(prev => ({ 
-                      ...prev, 
-                      [user.id]: { ...prev[user.id], iban: e.target.value } 
-                    }))}
-                    className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
-                  />
-                  <input
-                    type="text"
-                    placeholder="BIC (ex: BNPAFRPP)"
-                    value={manualIban[user.id]?.bic || ''}
-                    onChange={(e) => setManualIban(prev => ({ 
-                      ...prev, 
-                      [user.id]: { ...prev[user.id], bic: e.target.value } 
-                    }))}
-                    className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
-                  />
+                  <div>
+                    <label className="text-[10px] text-slate-600 font-medium">IBAN personnalisé</label>
+                    <input
+                      type="text"
+                      placeholder="FR7630004000030000000000043"
+                      value={manualIban[user.id]?.iban || ''}
+                      onChange={(e) => setManualIban(prev => ({ 
+                        ...prev, 
+                        [user.id]: { ...prev[user.id], iban: e.target.value } 
+                      }))}
+                      className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-600 font-medium">BIC personnalisé</label>
+                    <input
+                      type="text"
+                      placeholder="BNPAFRPPXXX"
+                      value={manualIban[user.id]?.bic || ''}
+                      onChange={(e) => setManualIban(prev => ({ 
+                        ...prev, 
+                        [user.id]: { ...prev[user.id], bic: e.target.value } 
+                      }))}
+                      className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                  </div>
                   <button
                     onClick={() => handleManualAssign(user.id)}
                     disabled={loading}
                     className="w-full px-2 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-[11px] font-medium rounded transition"
                   >
-                    {loading ? 'Attribution...' : 'Attribuer'}
+                    {loading ? 'Attribution...' : 'Attribuer IBAN/BIC'}
                   </button>
                 </div>
               </div>
