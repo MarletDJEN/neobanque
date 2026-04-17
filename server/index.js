@@ -12,7 +12,9 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 
 // Routes API
 import apiRoutes from './routes/api.routes.js';
+import eventsRoutes from './routes/events.routes.js';
 app.use('/api', apiRoutes);
+app.use('/api', eventsRoutes);
 
 // Pour développement local uniquement
 if (process.env.NODE_ENV !== 'production') {

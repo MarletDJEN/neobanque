@@ -1,6 +1,7 @@
 import { pool } from '../config/database.js';
 import { toAccount, toTransactionRow, toUserProfile } from '../utils/serialize.js';
 import { insertNotification } from '../utils/notify.js';
+import { sendEventToUser } from '../routes/events.routes.js';
 
 function mapUserAdminRow(row) {
   return {
@@ -190,6 +191,14 @@ export async function verifyUser(req, res) {
     );
     console.log('DEBUG: notification compte activé envoyée à', id);
     
+    // Envoyer événement SSE en temps réel
+    sendEventToUser(id, 'account_verified', {
+      status: 'active',
+      iban: generateIban ? iban : null,
+      initialBalance: initialBalance || null,
+      message: 'Compte validé par l\'administrateur'
+    });
+    
     await cli.query('COMMIT');
     const u = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     res.json({ 
@@ -231,6 +240,13 @@ export async function setUserStatus(req, res) {
         ? 'Votre compte a été suspendu par l’administrateur.'
         : 'Votre compte a été réactivé.';
     await insertNotification(cli, id, 'Statut du compte', msg);
+    
+    // Envoyer événement SSE en temps réel
+    sendEventToUser(id, 'status_changed', {
+      status: status,
+      message: msg
+    });
+    
     await cli.query('COMMIT');
     const u = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     res.json({ user: mapUserAdminRow(u.rows[0]) });
@@ -287,6 +303,13 @@ export async function assignIban(req, res) {
       'IBAN attribué',
       `Votre IBAN ${cleanIban.slice(0, 8)}… est actif. Vous pouvez maintenant effectuer le virement de 500 €.`
     );
+    
+    // Envoyer événement SSE en temps réel
+    sendEventToUser(id, 'iban_assigned', {
+      iban: cleanIban,
+      bic: finalBic,
+      message: 'IBAN attribué avec succès'
+    });
     
     await cli.query('COMMIT');
     

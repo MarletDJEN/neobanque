@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useSSE } from '../services/sse';
 import Sidebar from '../components/dashboard/Sidebar';
 import MobileTabBar from '../components/dashboard/MobileTabBar';
 import Overview from '../components/dashboard/Overview.jsx';
@@ -38,6 +39,7 @@ function PendingBanner({ suspended }) {
 export default function DashboardPage() {
   const { userProfile, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const { isConnected } = useSSE();
   const [activePage, setActivePage] = useState('overview');
   const [account, setAccount] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -269,10 +271,64 @@ export default function DashboardPage() {
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, []);
 
+  // Écouteurs d'événements personnalisés pour les mises à jour en temps réel
+  useEffect(() => {
+    const handleAccountVerified = (event) => {
+      console.log('Événement accountVerified reçu:', event.detail);
+      loadDashboard();
+    };
+
+    const handleIbanAssigned = (event) => {
+      console.log('Événement ibanAssigned reçu:', event.detail);
+      loadDashboard();
+    };
+
+    const handleStatusChanged = (event) => {
+      console.log('Événement statusChanged reçu:', event.detail);
+      loadDashboard();
+    };
+
+    const handleWithdrawalStepCompleted = (event) => {
+      console.log('Événement withdrawalStepCompleted reçu:', event.detail);
+      // Rafraîchir seulement si on est sur la page de progression
+      if (activePage === 'withdrawal-progress' || activePage === 'transfer') {
+        loadDashboard();
+      }
+    };
+
+    // Ajouter les écouteurs
+    window.addEventListener('accountVerified', handleAccountVerified);
+    window.addEventListener('ibanAssigned', handleIbanAssigned);
+    window.addEventListener('statusChanged', handleStatusChanged);
+    window.addEventListener('withdrawalStepCompleted', handleWithdrawalStepCompleted);
+
+    // Nettoyage
+    return () => {
+      window.removeEventListener('accountVerified', handleAccountVerified);
+      window.removeEventListener('ibanAssigned', handleIbanAssigned);
+      window.removeEventListener('statusChanged', handleStatusChanged);
+      window.removeEventListener('withdrawalStepCompleted', handleWithdrawalStepCompleted);
+    };
+  }, [activePage, loadDashboard]);
+
   const unreadCount = notifications.filter((n) => !n.read).length;
   const isPending = userProfile?.accountStatus === 'pending' || account?.status === 'pending';
   const isSuspended = userProfile?.accountStatus === 'suspended' || account?.status === 'suspended' || account?.status === 'blocked';
   const isLockedOps = isPending || isSuspended;
+
+  // Indicateur de connexion SSE
+  const SseIndicator = () => (
+    <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium transition-all ${
+      isConnected 
+        ? 'bg-green-100 text-green-700 border border-green-200' 
+        : 'bg-red-100 text-red-700 border border-red-200'
+    }`}>
+      <div className={`w-2 h-2 rounded-full ${
+        isConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'
+      }`} />
+      {isConnected ? 'Temps réel' : 'Hors ligne'}
+    </div>
+  );
 
   const renderPage = () => {
     // Rafraîchir les données quand on navigue vers des pages critiques
@@ -331,6 +387,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-[100dvh] min-h-0 bg-slate-50 overflow-hidden">
+      <SseIndicator />
       <div className="hidden md:block">
         <Sidebar
           activePage={activePage}
