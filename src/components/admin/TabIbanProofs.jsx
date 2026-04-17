@@ -8,6 +8,8 @@ const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency:
 function TabIbanProofs({ users, requests, load }) {
   const [selectedProof, setSelectedProof] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [manualIban, setManualIban] = useState({});
+  const [showManualForm, setShowManualForm] = useState(false);
 
   // Filtrer les preuves de virement (transfer_proof depuis account_activation_requests)
   const transferProofs = requests.filter((r) => {
@@ -80,6 +82,49 @@ function TabIbanProofs({ users, requests, load }) {
     }
   };
 
+  const handleManualAssign = async (userId) => {
+    const iban = manualIban[userId]?.iban?.trim();
+    const bic = manualIban[userId]?.bic?.trim();
+    
+    if (!iban || !bic) {
+      toast.error('IBAN et BIC sont requis');
+      return;
+    }
+    
+    // Validation simple de l'IBAN
+    if (iban.length < 15 || iban.length > 34) {
+      toast.error('IBAN invalide (doit contenir entre 15 et 34 caractères)');
+      return;
+    }
+    
+    // Validation simple du BIC
+    if (bic.length < 8 || bic.length > 11) {
+      toast.error('BIC invalide (doit contenir entre 8 et 11 caractères)');
+      return;
+    }
+    
+    if (!window.confirm(`Attribuer l'IBAN ${iban} et BIC ${bic} à cet utilisateur ?`)) return;
+    
+    setLoading(true);
+    try {
+      await api.post(`/admin/users/${userId}/iban`, { 
+        iban,
+        bic,
+        activateIban: true 
+      });
+      
+      toast.success('✅ IBAN et BIC attribués avec succès !');
+      setManualIban(prev => ({ ...prev, [userId]: { iban: '', bic: '' } }));
+      setShowManualForm(false);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erreur lors de l\'attribution');
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('fr-FR', { 
@@ -93,7 +138,64 @@ function TabIbanProofs({ users, requests, load }) {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-[18px] font-semibold">Preuves de virement IBAN</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-[18px] font-semibold">Preuves de virement IBAN</h1>
+        <button
+          onClick={() => setShowManualForm(!showManualForm)}
+          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[11px] font-medium transition"
+        >
+          {showManualForm ? 'Masquer' : 'Attribuer'} IBAN/BIC manuellement
+        </button>
+      </div>
+
+      {/* Formulaire d'attribution manuelle */}
+      {showManualForm && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
+          <h3 className="text-[14px] font-semibold mb-3">Attribution manuelle d'IBAN/BIC</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {users.filter(u => !u.iban || u.iban_status !== 'active').map(user => (
+              <div key={user.id} className="bg-white border border-slate-100 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <User className="w-4 h-4 text-slate-600" />
+                  <div>
+                    <p className="font-medium text-[12px]">{user.displayName || 'Client'}</p>
+                    <p className="text-[10px] text-slate-500">{user.email}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="IBAN (ex: FR7630006000011234567890189)"
+                    value={manualIban[user.id]?.iban || ''}
+                    onChange={(e) => setManualIban(prev => ({ 
+                      ...prev, 
+                      [user.id]: { ...prev[user.id], iban: e.target.value } 
+                    }))}
+                    className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
+                  />
+                  <input
+                    type="text"
+                    placeholder="BIC (ex: BNPAFRPP)"
+                    value={manualIban[user.id]?.bic || ''}
+                    onChange={(e) => setManualIban(prev => ({ 
+                      ...prev, 
+                      [user.id]: { ...prev[user.id], bic: e.target.value } 
+                    }))}
+                    className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
+                  />
+                  <button
+                    onClick={() => handleManualAssign(user.id)}
+                    disabled={loading}
+                    className="w-full px-2 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-[11px] font-medium rounded transition"
+                  >
+                    {loading ? 'Attribution...' : 'Attribuer'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* Statistiques */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
