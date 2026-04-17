@@ -1,5 +1,4 @@
 # Secrets & environnement
-.env
 .env.local
 .env.*.local
 
