@@ -56,7 +56,7 @@ router.post('/admin/activation-requests/:id/reject', authMiddleware, adminMiddle
 // Routes pour les demandes de retrait
 router.get('/admin/withdrawal-requests', authMiddleware, adminMiddleware, clientCtl.getWithdrawalRequests);
 router.post('/admin/withdrawal-requests/:id/approve', authMiddleware, adminMiddleware, adminCtl.approveWithdrawalRequest);
-router.post('/admin/withdrawal-requests/:id/generate-and-send-code', authMiddleware, adminMiddleware, adminCtl.generateAndSendWithdrawalCode);
+router.post('/admin/withdrawal-requests/:id/generate-and-send-code', authMiddleware, adminMiddleware, adminCtl.generateWithdrawalCode);
 router.post('/admin/withdrawal-requests/:id/generate-code', authMiddleware, adminMiddleware, adminCtl.generateWithdrawalCode);
 router.post('/admin/withdrawal-requests/:id/reject', authMiddleware, adminMiddleware, clientCtl.rejectWithdrawalRequest);
 router.post('/admin/withdrawal-requests/:id/decide', authMiddleware, adminMiddleware, adminCtl.adminDecideWithdrawal);
