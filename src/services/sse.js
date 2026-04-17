@@ -73,9 +73,9 @@ export function useSSE() {
   };
 
   const handleAccountVerified = (data) => {
-    // Afficher une notification toast
+    // Afficher une notification toast (éviter les doublons)
     if (typeof window !== 'undefined' && window.toast) {
-      window.toast.success('🎉 Compte validé !', {
+      window.toast.success('🎉 Compte validé par l\'admin !', {
         duration: 5000,
         position: 'top-center',
         icon: 'success'
@@ -90,7 +90,7 @@ export function useSSE() {
 
   const handleIbanAssigned = (data) => {
     if (typeof window !== 'undefined' && window.toast) {
-      window.toast.success('🏦 IBAN attribué !', {
+      window.toast.success('🏦 IBAN attribué par l\'admin !', {
         duration: 4000,
         position: 'top-center'
       });
@@ -102,9 +102,9 @@ export function useSSE() {
   const handleStatusChanged = (data) => {
     if (typeof window !== 'undefined' && window.toast) {
       const statusMessages = {
-        'active': '✅ Compte activé',
-        'suspended': '⚠️ Compte suspendu',
-        'blocked': '❌ Compte bloqué'
+        'active': '✅ Compte activé par l\'admin',
+        'suspended': '⚠️ Compte suspendu par l\'admin',
+        'blocked': '❌ Compte bloqué par l\'admin'
       };
       
       window.toast(statusMessages[data.status] || 'Statut modifié', {

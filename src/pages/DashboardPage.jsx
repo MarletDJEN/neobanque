@@ -87,9 +87,9 @@ export default function DashboardPage() {
           newIbanStatus: newAccount?.ibanStatus
         });
         
-        // Notification si le compte vient d'être pleinement activé
-        if (wasInactive && isActiveNow) {
-          console.log('DEBUG: Envoi notification compte activé');
+        // Notification si le compte vient d'être pleinement activé (seulement si SSE n'est pas connecté)
+        if (wasInactive && isActiveNow && !isConnected) {
+          console.log('DEBUG: Envoi notification compte activé (polling)');
           toast.success('Félicitations ! Votre compte et votre IBAN sont maintenant activés !', {
             duration: 6000,
             position: 'top-center',
@@ -100,8 +100,8 @@ export default function DashboardPage() {
           setTimeout(() => setActivePage('overview'), 1000);
         }
         
-        // Notification si l'IBAN vient d'être attribué
-        if (!lastAccountStatus?.iban && newAccount?.iban) {
+        // Notification si l'IBAN vient d'être attribué (seulement si SSE n'est pas connecté)
+        if (!lastAccountStatus?.iban && newAccount?.iban && !isConnected) {
           toast.success('IBAN attribué ! Vous pouvez maintenant effectuer le virement.', {
             duration: 4000,
             position: 'top-center'
@@ -109,7 +109,7 @@ export default function DashboardPage() {
         }
         
         // Notification si l'IBAN vient d'être activé (passage de assigned/approved à active)
-        if (lastAccountStatus?.ibanStatus !== 'active' && newAccount?.ibanStatus === 'active') {
+        if (lastAccountStatus?.ibanStatus !== 'active' && newAccount?.ibanStatus === 'active' && !isConnected) {
           toast.success('IBAN activé ! Tous les services sont maintenant disponibles.', {
             duration: 5000,
             position: 'top-center',
@@ -118,7 +118,7 @@ export default function DashboardPage() {
         }
         
         // Notification si le statut du compte change (pending -> active)
-        if (lastAccountStatus?.status === 'pending' && newAccount?.status === 'active') {
+        if (lastAccountStatus?.status === 'pending' && newAccount?.status === 'active' && !isConnected) {
           toast.success('Compte activé par l\'administrateur !', {
             duration: 5000,
             position: 'top-center'
@@ -126,7 +126,7 @@ export default function DashboardPage() {
         }
         
         // Notification si une carte vient d'être activée
-        if (lastAccountStatus?.cardStatus !== 'active' && newAccount?.cardStatus === 'active') {
+        if (lastAccountStatus?.cardStatus !== 'active' && newAccount?.cardStatus === 'active' && !isConnected) {
           toast.success('Carte bancaire activée !', {
             duration: 4000,
             position: 'top-center'
@@ -134,7 +134,7 @@ export default function DashboardPage() {
         }
         
         // Notification si le KYC vient d'être approuvé
-        if (lastAccountStatus?.kycStatus !== 'approved' && newAccount?.kycStatus === 'approved') {
+        if (lastAccountStatus?.kycStatus !== 'approved' && newAccount?.kycStatus === 'approved' && !isConnected) {
           toast.success('Vérification d\'identité approuvée !', {
             duration: 4000,
             position: 'top-center'
@@ -165,6 +165,12 @@ export default function DashboardPage() {
     let interval = null;
     
     const startPolling = () => {
+      // NE PAS DÉMARRER LE POLLING SI SSE EST CONNECTÉ
+      if (isConnected) {
+        console.log('SSE connecté - pas besoin de polling automatique');
+        return;
+      }
+      
       // Intervalle plus court pour une meilleure réactivité
       const pollingInterval = (
         (account?.ibanStatus === 'assigned' || account?.ibanStatus === 'approved') ? 2000 : // 2s si IBAN attribué en attente de virement
@@ -203,18 +209,20 @@ export default function DashboardPage() {
       }, pollingInterval);
     };
     
-    // Démarrer le polling immédiatement si nécessaire
+    // Démarrer le polling seulement si SSE n'est pas connecté
     const needsPolling = (
-      account?.status === 'pending' || 
-      account?.ibanStatus === 'pending' || 
-      account?.ibanStatus === 'requested' ||
-      (account?.iban && account?.ibanStatus === 'assigned' && !account?.accountVerified) ||
-      (account?.iban && account?.ibanStatus === 'approved' && !account?.accountVerified) ||
-      account?.cardStatus === 'pending' ||
-      account?.cardStatus === 'requested'
+      !isConnected && (
+        account?.status === 'pending' || 
+        account?.ibanStatus === 'pending' || 
+        account?.ibanStatus === 'requested' ||
+        (account?.iban && account?.ibanStatus === 'assigned' && !account?.accountVerified) ||
+        (account?.iban && account?.ibanStatus === 'approved' && !account?.accountVerified) ||
+        account?.cardStatus === 'pending' ||
+        account?.cardStatus === 'requested'
+      )
     );
     
-    console.log('Configuration du polling automatique:', { needsPolling, account });
+    console.log('Configuration du polling automatique:', { needsPolling, isConnected, account });
     
     if (needsPolling) {
       startPolling();
@@ -227,7 +235,7 @@ export default function DashboardPage() {
         clearInterval(interval);
       }
     };
-  }, [account, loadDashboard]);
+  }, [account, loadDashboard, isConnected]);
 
   // Rafraîchir quand l'utilisateur revient sur l'onglet
   useEffect(() => {
@@ -242,7 +250,7 @@ export default function DashboardPage() {
           account?.cardStatus === 'requested'
         );
         
-        if (hasPendingStatus) {
+        if (hasPendingStatus && !isConnected) {
           console.log('Utilisateur revenu sur l\'onglet - rafraîchissement des données');
           loadDashboard();
           toast.success('Vérification des mises à jour...', { 
