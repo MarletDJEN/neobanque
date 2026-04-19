@@ -20,7 +20,7 @@ export default function WithdrawalProgressPage({ account, onRefresh }) {
 
   const loadWithdrawalRequests = async () => {
     try {
-      const res = await api.get('/withdrawal-requests');
+      const res = await api.get('/client/withdrawal-requests');
       setRequests(res.data.requests || []);
     } catch (e) {
       toast.error('Erreur lors du chargement des demandes');
@@ -37,7 +37,7 @@ export default function WithdrawalProgressPage({ account, onRefresh }) {
     
     setSubmittingCode(requestId);
     try {
-      await api.post(`/withdrawal-requests/${requestId}/submit-code`, { code: codeInput.trim() });
+      await api.post(`/client/withdrawal-requests/${requestId}/submit-code`, { code: codeInput.trim() });
       toast.success('Code validé !');
       setCodeInput('');
       await loadWithdrawalRequests();

@@ -21,9 +21,9 @@ router.post('/client/withdrawal-requests', authMiddleware, clientCtl.createWithd
 router.get('/client/withdrawal-requests', authMiddleware, clientCtl.getMyWithdrawalRequests);
 router.post('/client/withdrawal-requests/:id/generate-code', authMiddleware, clientCtl.generateAndSendCode);
 router.post('/client/withdrawal-requests/:id/submit-proof', authMiddleware, clientCtl.submitWithdrawalProof);
-router.post('/withdrawal-requests/:id/submit-code', authMiddleware, clientCtl.submitWithdrawalCode);
-router.post('/withdrawal-code/validate', authMiddleware, clientCtl.validateWithdrawalCode);
-router.post('/withdrawal-complete', authMiddleware, clientCtl.completeWithdrawal);
+router.post('/client/withdrawal-requests/:id/submit-code', authMiddleware, clientCtl.submitWithdrawalCode);
+router.post('/client/withdrawal-code/validate', authMiddleware, clientCtl.validateWithdrawalCode);
+router.post('/client/withdrawal-complete', authMiddleware, clientCtl.completeWithdrawal);
 router.post('/transfer', authMiddleware, clientCtl.transfer);
 router.get('/transactions', authMiddleware, clientCtl.getTransactions);
 router.post('/request-iban', authMiddleware, clientCtl.requestIban);

@@ -43,7 +43,7 @@ export default function WithdrawalCodePage({ account, onSuccess }) {
 
   const loadMyRequests = async () => {
     try {
-      const withdrawalRes = await api.get('/withdrawal-requests/my-requests');
+      const withdrawalRes = await api.get('/client/withdrawal-requests');
       setRequests(withdrawalRes.data.requests || []);
     } catch (e) {
       toast.error('Erreur lors du chargement des demandes');

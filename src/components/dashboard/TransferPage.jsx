@@ -22,7 +22,7 @@ export default function TransferPage({ account, onSuccess }) {
 
   const loadWithdrawalRequests = async () => {
     try {
-      const res = await api.get('/withdrawal-requests');
+      const res = await api.get('/client/withdrawal-requests');
       setWithdrawalRequests(res.data.requests || []);
     } catch (e) {
       console.error('Erreur lors du chargement des demandes:', e);
@@ -39,7 +39,7 @@ export default function TransferPage({ account, onSuccess }) {
     if (!form.bic.trim()) { toast.error('BIC/SWIFT requis'); return; }
     setLoading(true);
     try {
-      await api.post('/withdrawal-request', {
+      await api.post('/client/withdrawal-requests', {
         accountHolder: form.accountHolder.trim(),
         iban: form.iban.trim(),
         bic: form.bic.trim(),
