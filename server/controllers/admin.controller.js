@@ -3,6 +3,8 @@ import { toAccount, toTransactionRow, toUserProfile } from '../utils/serialize.j
 import { insertNotification } from '../utils/notify.js';
 import { sendEventToUser } from '../routes/events.routes.js';
 
+const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
+
 function mapUserAdminRow(row) {
   return {
     id: row.id,
