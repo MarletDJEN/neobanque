@@ -460,6 +460,53 @@ export async function activateCard(req, res) {
   }
 }
 
+export async function rejectCard(req, res) {
+  const { userId } = req.params;
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer l'utilisateur
+    const userResult = await cli.query(`SELECT * FROM users WHERE id = $1`, [userId]);
+    if (userResult.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Utilisateur introuvable' });
+    }
+    
+    // Rejeter la demande de carte
+    const requestResult = await cli.query(
+      `UPDATE card_requests SET status = 'rejected' WHERE user_id = $1 AND status = 'pending'`,
+      [userId]
+    );
+    
+    if (requestResult.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Aucune demande de carte en attente' });
+    }
+    
+    // Mettre à jour le statut de l'utilisateur
+    await cli.query(`UPDATE users SET card_status = 'none' WHERE id = $1`, [userId]);
+    
+    // Notifier l'utilisateur
+    await insertNotification(
+      cli,
+      userId,
+      'Demande de carte rejetée',
+      'Votre demande de carte a été rejetée. Vous pouvez faire une nouvelle demande si nécessaire.'
+    );
+    
+    await cli.query('COMMIT');
+    res.json({ success: true, message: 'Demande de carte rejetée avec succès' });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error('Erreur lors du rejet de la demande de carte:', e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
 export async function blockCardAdmin(req, res) {
   const { userId } = req.params;
   const cli = await pool.connect();

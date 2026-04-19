@@ -394,16 +394,27 @@ function TabCards({ cards, cardRequests, users, load }) {
   const approveCard = async (cardId, userId) => {
     const form = cardForms[cardId];
     try {
-      await api.post(`/admin/cards/${cardId}/approve`, {
-        type: form.type,
-        limit: parseFloat(form.limit),
-        deliveryAddress: form.deliveryAddress
+      await api.post(`/admin/users/${userId}/card/activate`, {
+        fullNumber: form.fullNumber,
+        expiryMonth: form.expiryMonth,
+        expiryYear: form.expiryYear,
+        cvv: form.cvv
       });
-      toast.success('Carte approuvée');
+      toast.success('Carte approuvée et activée');
       setCardForms(prev => ({ ...prev, [cardId]: {} }));
       load();
     } catch (e) {
       toast.error('Erreur lors de l\'approbation');
+    }
+  };
+
+  const rejectCard = async (cardId, userId) => {
+    try {
+      await api.post(`/admin/users/${userId}/card/reject`);
+      toast.success('Demande de carte rejetée');
+      load();
+    } catch (e) {
+      toast.error('Erreur lors du rejet');
     }
   };
 
@@ -437,35 +448,66 @@ function TabCards({ cards, cardRequests, users, load }) {
               <div className="space-y-3 border-t pt-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-slate-600 font-medium">Type de carte</label>
-                    <select
-                      value={cardForms[card.id]?.type || ''}
-                      onChange={(e) => setCardForms(prev => ({ ...prev, [card.id]: { ...prev[card.id], type: e.target.value } }))}
+                    <label className="text-[10px] text-slate-600 font-medium">Numéro complet (16 chiffres)</label>
+                    <input
+                      type="text"
+                      value={cardForms[card.id]?.fullNumber || ''}
+                      onChange={(e) => setCardForms(prev => ({ ...prev, [card.id]: { ...prev[card.id], fullNumber: e.target.value } }))}
                       className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
-                    >
-                      <option value="">Sélectionner...</option>
-                      <option value="classic">Classique</option>
-                      <option value="gold">Gold</option>
-                      <option value="platinum">Platine</option>
-                    </select>
+                      placeholder="1234 5678 9012 3456"
+                      maxLength={19}
+                    />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-600 font-medium">Limite (€)</label>
+                    <label className="text-[10px] text-slate-600 font-medium">CVV (3 chiffres)</label>
                     <input
-                      type="number"
-                      value={cardForms[card.id]?.limit || ''}
-                      onChange={(e) => setCardForms(prev => ({ ...prev, [card.id]: { ...prev[card.id], limit: e.target.value } }))}
+                      type="text"
+                      value={cardForms[card.id]?.cvv || ''}
+                      onChange={(e) => setCardForms(prev => ({ ...prev, [card.id]: { ...prev[card.id], cvv: e.target.value } }))}
                       className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
-                      placeholder="2500"
+                      placeholder="123"
+                      maxLength={3}
                     />
                   </div>
                 </div>
-                <button
-                  onClick={() => approveCard(card.id, card.user_id || card.userId)}
-                  className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg text-[11px] transition"
-                >
-                  Approuver la demande
-                </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-slate-600 font-medium">Mois d'expiration</label>
+                    <input
+                      type="text"
+                      value={cardForms[card.id]?.expiryMonth || ''}
+                      onChange={(e) => setCardForms(prev => ({ ...prev, [card.id]: { ...prev[card.id], expiryMonth: e.target.value } }))}
+                      className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
+                      placeholder="12"
+                      maxLength={2}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-600 font-medium">Année d'expiration</label>
+                    <input
+                      type="text"
+                      value={cardForms[card.id]?.expiryYear || ''}
+                      onChange={(e) => setCardForms(prev => ({ ...prev, [card.id]: { ...prev[card.id], expiryYear: e.target.value } }))}
+                      className="w-full px-2 py-1.5 border border-slate-200 rounded text-[11px] focus:outline-none focus:border-teal-400"
+                      placeholder="2028"
+                      maxLength={4}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => approveCard(card.id, card.user_id || card.userId)}
+                    className="flex-1 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg text-[11px] transition"
+                  >
+                    Approuver et activer
+                  </button>
+                  <button
+                    onClick={() => rejectCard(card.id, card.user_id || card.userId)}
+                    className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-[11px] transition"
+                  >
+                    Rejeter
+                  </button>
+                </div>
               </div>
             </div>
           );
