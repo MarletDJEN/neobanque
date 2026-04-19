@@ -40,6 +40,7 @@ const TABS = [
   { id: 'clients', label: 'Comptes Clients', icon: Users },
   { id: 'requests', label: 'Demandes', icon: FileText },
   { id: 'iban-requests', label: 'Demandes IBAN', icon: Globe },
+  { id: 'iban-proofs', label: 'Preuves IBAN', icon: Upload },
   { id: 'withdrawal-requests', label: 'Retraits', icon: ArrowLeftRight },
   { id: 'cards', label: 'Cartes', icon: CreditCard },
   { id: 'transactions', label: 'Transactions', icon: TrendingUp },
@@ -168,6 +169,7 @@ export default function AdminPage() {
               {tab === 'clients' && <TabClients {...shared} />}
               {tab === 'requests' && <TabRequests {...shared} />}
               {tab === 'iban-requests' && <TabIbanRequests {...shared} />}
+              {tab === 'iban-proofs' && <TabIbanProofs {...shared} />}
               {tab === 'withdrawal-requests' && <TabWithdrawalRequests {...shared} />}
               {tab === 'cards' && <TabCards {...shared} />}
               {tab === 'transactions' && <TabTx {...shared} />}
@@ -228,7 +230,7 @@ function TabRequests({ users, requests, accounts, cards, cardRequests, kycSubmis
     try {
       await api.post(`/admin/users/${userId}/verify`);
       toast.success('Compte approuvé avec succès');
-      load();
+      setTimeout(() => load(), 300);
     } catch (e) {
       toast.error('Erreur lors de l\'approbation');
     }
@@ -238,7 +240,7 @@ function TabRequests({ users, requests, accounts, cards, cardRequests, kycSubmis
     try {
       await api.post(`/admin/kyc/${kycId}/approve`);
       toast.success('KYC approuvé');
-      load();
+      setTimeout(() => load(), 300);
     } catch (e) {
       toast.error('Erreur lors de l\'approbation KYC');
     }
@@ -267,7 +269,10 @@ function TabRequests({ users, requests, accounts, cards, cardRequests, kycSubmis
       await api.post(`/admin/users/${userId}/iban`, { iban, bic, activateIban: true });
       toast.success('IBAN et BIC attribués avec succès !');
       setManualIbanForm(prev => ({ ...prev, [userId]: { iban: '', bic: '' } }));
-      load();
+      // Forcer le rechargement avec un petit délai pour s'assurer que le backend a bien mis à jour
+      setTimeout(() => {
+        load();
+      }, 500);
     } catch (e) {
       toast.error(e.response?.data?.error || 'Erreur lors de l\'attribution IBAN');
     }
