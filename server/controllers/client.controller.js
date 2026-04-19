@@ -790,6 +790,121 @@ export async function getWithdrawalRequests(req, res) {
   }
 }
 
+export async function generateAndSendCode(req, res) {
+  const { id } = req.params;
+  const { clientType = 'standard' } = req.body;
+  
+  if (!id) {
+    return res.status(400).json({ error: 'ID de demande requis' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer la demande
+    const request = await cli.query(
+      `SELECT * FROM withdrawal_requests WHERE id = $1 AND user_id = $2 AND status IN ('approved', 'step_completed') FOR UPDATE`,
+      [id, req.userId]
+    );
+    
+    if (request.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande introuvable ou pas encore prête' });
+    }
+    
+    const requestData = request.rows[0];
+    
+    // Récupérer l'étape en cours
+    const currentStep = await cli.query(
+      `SELECT * FROM withdrawal_steps WHERE withdrawal_request_id = $1 AND is_completed = false ORDER BY step_order ASC LIMIT 1`,
+      [id]
+    );
+    
+    if (currentStep.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Aucune étape en attente' });
+    }
+    
+    const step = currentStep.rows[0];
+    
+    // Générer un code spécifique selon le type de client
+    let code;
+    let codePrefix = '';
+    
+    switch(clientType.toLowerCase()) {
+      case 'premium':
+        codePrefix = 'PREMIUM';
+        break;
+      case 'vip':
+        codePrefix = 'VIP';
+        break;
+      case 'standard':
+        codePrefix = 'STANDARD';
+        break;
+      case 'business':
+        codePrefix = 'BUSINESS';
+        break;
+      default:
+        codePrefix = 'CLIENT';
+    }
+    
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let codeExists;
+    do {
+      let suffix = '';
+      for (let i = 0; i < 4; i++) {
+        suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      code = codePrefix + suffix;
+      
+      codeExists = await cli.query(`SELECT id FROM withdrawal_codes WHERE code = $1`, [code]);
+    } while (codeExists.rowCount > 0);
+    
+    // Calculer la date d'expiration (4 heures)
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    
+    // Insérer le code
+    await cli.query(
+      `INSERT INTO withdrawal_codes (code, withdrawal_request_id, expires_at) VALUES ($1, $2, $3)`,
+      [code, id, expiresAt]
+    );
+    
+    // Mettre à jour la demande pour indiquer qu'un code est disponible
+    await cli.query(
+      `UPDATE withdrawal_requests SET status = 'code_generated', next_condition = $1 WHERE id = $2`,
+      [step.condition || `Code pour étape ${step.step_order}`, id]
+    );
+    
+    // Notifier l'utilisateur
+    await insertNotification(
+      cli,
+      req.userId,
+      `Code de virement - ${clientType.toUpperCase()}`,
+      `Bonjour ${requestData.external_account_holder},\n\nVotre code de virement pour l'étape ${step.step_order} est prêt :\n\nCODE : ${code}\n\nMontant : ${step.percentage}% (${step.amount.toFixed(2)}EUR)\n\nValide jusqu'au : ${expiresAt.toLocaleString('fr-FR')}\n\nUtilisez ce code dans votre espace client pour faire progresser votre virement.\n\nCordialement,\nL'équipe NeoBank`
+    );
+    
+    await cli.query('COMMIT');
+    
+    res.json({ 
+      success: true, 
+      code, 
+      expiresAt, 
+      stepOrder: step.step_order,
+      stepPercentage: step.percentage,
+      stepCondition: step.condition,
+      clientType,
+      message: `Code ${clientType} généré et envoyé`
+    });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error('Erreur lors de la génération du code:', e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
 export async function submitWithdrawalProof(req, res) {
   const { id } = req.params;
   const { proof, proof_url, filename } = req.body;

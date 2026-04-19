@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Upload, CheckCircle, XCircle, Clock, AlertCircle, FileText, Euro, User, Calendar, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Upload, CheckCircle, XCircle, Clock, AlertCircle, FileText, Euro, User, Calendar, TrendingUp, Key } from 'lucide-react';
 
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
 const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -96,6 +96,21 @@ export default function WithdrawalPage() {
       }
       setProofFile(file);
       setProofUrl('');
+    }
+  };
+
+  const handleGenerateCode = async (requestId) => {
+    setUploadingProof(true);
+    try {
+      const { data } = await api.post(`/client/withdrawal-requests/${requestId}/generate-code`, {
+        clientType: 'standard'
+      });
+      toast.success(`Code généré : ${data.code}`);
+      loadRequests();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erreur lors de la génération du code');
+    } finally {
+      setUploadingProof(false);
     }
   };
 
@@ -355,8 +370,36 @@ export default function WithdrawalPage() {
                   </div>
                 )}
 
+                {/* Génération de code */}
+                {(request.status === 'approved' || request.status === 'step_completed') && (
+                  <div className="border-t pt-4">
+                    <h3 className="font-medium text-slate-800 mb-3">Générer un code de virement</h3>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-amber-800">Instructions</p>
+                          <p className="text-sm text-amber-700">
+                            1. Faites le virement du montant indiqué<br/>
+                            2. Téléversez la preuve du virement<br/>
+                            3. L'admin validera et le virement progressera
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleGenerateCode(request.id)}
+                      disabled={uploadingProof}
+                      className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <Key className="w-4 h-4" />
+                      {uploadingProof ? 'Génération...' : 'Générer un code'}
+                    </button>
+                  </div>
+                )}
+
                 {/* Preuve de virement */}
-                {(request.status === 'code_generated' || request.status === 'step_completed') && (
+                {request.status === 'code_generated' && (
                   <div className="border-t pt-4">
                     <h3 className="font-medium text-slate-800 mb-3">Soumettre la preuve de virement</h3>
                     <div className="space-y-3">

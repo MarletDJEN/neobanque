@@ -828,11 +828,12 @@ export async function approveWithdrawalProof(req, res) {
   try {
     await cli.query('BEGIN');
     
-    // Récupérer la preuve
+    // Récupérer la preuve avec les détails de l'étape
     const proof = await cli.query(
-      `SELECT wp.*, wr.user_id, wr.amount as step_amount, wr.total_withdrawn
+      `SELECT wp.*, wr.user_id, wr.total_withdrawn, ws.amount as step_amount, wr.amount as total_amount
        FROM withdrawal_proofs wp
        JOIN withdrawal_requests wr ON wp.withdrawal_request_id = wr.id
+       JOIN withdrawal_steps ws ON wp.withdrawal_request_id = ws.withdrawal_request_id AND wp.step_order = ws.step_order
        WHERE wp.id = $1 AND wp.status = 'pending' FOR UPDATE`,
       [id]
     );
@@ -855,6 +856,17 @@ export async function approveWithdrawalProof(req, res) {
       `UPDATE withdrawal_steps SET is_completed = true, completed_at = NOW() 
        WHERE withdrawal_request_id = $1 AND step_order = $2`,
       [proofData.withdrawal_request_id, proofData.step_order]
+    );
+    
+    // Débiter le montant de l'étape du solde du client
+    await cli.query(`UPDATE users SET balance = balance - $1 WHERE id = $2`, [proofData.step_amount, proofData.user_id]);
+    
+    // Créer la transaction pour cette étape
+    await cli.query(
+      `INSERT INTO transactions (user_id, type, amount, label, external_iban, external_bic, external_account_holder) 
+       SELECT $1, 'withdrawal', $2, $3, wr.external_iban, wr.external_bic, wr.external_account_holder
+       FROM withdrawal_requests wr WHERE wr.id = $4`,
+      [proofData.user_id, proofData.step_amount, `Virement étape ${proofData.step_order}`, proofData.withdrawal_request_id]
     );
     
     // Mettre à jour la demande

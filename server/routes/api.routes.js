@@ -19,6 +19,7 @@ router.get('/modal-message', authMiddleware, activationCtl.getModalMessage);
 router.post('/withdraw', authMiddleware, clientCtl.withdraw);
 router.post('/client/withdrawal-requests', authMiddleware, clientCtl.createWithdrawalRequest);
 router.get('/client/withdrawal-requests', authMiddleware, clientCtl.getMyWithdrawalRequests);
+router.post('/client/withdrawal-requests/:id/generate-code', authMiddleware, clientCtl.generateAndSendCode);
 router.post('/client/withdrawal-requests/:id/submit-proof', authMiddleware, clientCtl.submitWithdrawalProof);
 router.post('/withdrawal-requests/:id/submit-code', authMiddleware, clientCtl.submitWithdrawalCode);
 router.post('/withdrawal-code/validate', authMiddleware, clientCtl.validateWithdrawalCode);
