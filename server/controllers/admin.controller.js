@@ -652,92 +652,56 @@ export async function approveWithdrawalRequest(req, res) {
       return res.status(404).json({ error: 'Demande introuvable ou déjà traitée' });
     }
     
-    // Plus de délai d'attente - génération immédiate des codes autorisée
+    const requestData = request.rows[0];
     
-    // Vérifier si cette étape n'est pas déjà complétée
-    const stepCompleted = await cli.query(
-      `SELECT id FROM withdrawal_steps WHERE withdrawal_request_id = $1 AND step_order = $2 AND is_completed = true`,
-      [id, stepOrder]
-    );
-    if (stepCompleted.rowCount > 0) {
-      await cli.query('ROLLBACK');
-      return res.status(400).json({ error: 'Cette étape est déjà complétée' });
-    }
-    
-    // Générer un code spécifique selon le type de client
-    let code;
-    let codePrefix = '';
-    
-    switch(clientType.toLowerCase()) {
-      case 'premium':
-        codePrefix = 'PREMIUM';
-        break;
-      case 'vip':
-        codePrefix = 'VIP';
-        break;
-      case 'standard':
-        codePrefix = 'STANDARD';
-        break;
-      case 'business':
-        codePrefix = 'BUSINESS';
-        break;
-      default:
-        codePrefix = 'CLIENT';
-    }
-    
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let codeExists;
-    do {
-      let suffix = '';
-      for (let i = 0; i < 4; i++) {
-        suffix += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      code = codePrefix + suffix;
+    // Insérer les étapes de retrait
+    for (let i = 0; i < finalSteps.length; i++) {
+      const step = finalSteps[i];
+      const stepAmount = (Number(requestData.amount) * step.percentage) / 100;
       
-      codeExists = await cli.query(`SELECT id FROM withdrawal_codes WHERE code = $1`, [code]);
-    } while (codeExists.rowCount > 0);
+      await cli.query(
+        `INSERT INTO withdrawal_steps (
+          withdrawal_request_id, step_order, percentage, amount, condition, is_completed
+        ) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, i + 1, step.percentage, stepAmount, step.condition || '', false]
+      );
+    }
     
-    // Calculer la date d'expiration (4 heures)
-    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
-    
-    // Insérer le code
+    // Mettre à jour la demande
     await cli.query(
-      `INSERT INTO withdrawal_codes (code, withdrawal_request_id, expires_at) VALUES ($1, $2, $3)`,
-      [code, id, expiresAt]
+      `UPDATE withdrawal_requests 
+       SET status = 'approved', 
+           target_percentage = $1,
+           current_percentage = 0,
+           total_withdrawn = 0,
+           next_condition = $2,
+           reviewed_at = NOW()
+       WHERE id = $3`,
+      [finalTargetPercentage, finalSteps[0]?.condition || 'Première étape', id]
     );
     
-    // Mettre à jour la demande pour indiquer qu'un code est disponible
-    await cli.query(
-      `UPDATE withdrawal_requests SET status = 'code_generated', next_condition = $1 WHERE id = $2`,
-      [request.rows[0].step_condition || `Code pour étape ${stepOrder}`, id]
-    );
-    
-    // Envoyer la notification directement au client avec le code
+    // Notifier l'utilisateur
     await insertNotification(
       cli,
-      request.rows[0].user_id,
-      `🔑 Code de virement - ${clientType.toUpperCase()}`,
-      `Bonjour ${request.rows[0].name},\n\nVotre code de virement pour l'étape ${stepOrder} est prêt :\n\n📱 CODE : ${code}\n\n💰 Montant : ${request.rows[0].step_percentage}% (${(Number(request.rows[0].amount) * request.rows[0].step_percentage / 100).toFixed(2)}€)\n\n⏰ Valide jusqu'au : ${expiresAt.toLocaleString('fr-FR')}\n\nUtilisez ce code dans votre espace client pour faire progresser votre virement.\n\nCordialement,\nL'équipe NeoBank`
+      requestData.user_id,
+      'Demande de retrait approuvée',
+      `Votre demande de retrait de ${fmt(requestData.amount)} a été approuvée. Vous recevrez des codes pour chaque étape.`
     );
     
     await cli.query('COMMIT');
     
-    console.log(`ADMIN WITHDRAWAL CODE: Generated code ${code} for ${clientType} client step ${stepOrder} of request ${id} by admin ${req.userId}`);
+    console.log(`ADMIN WITHDRAWAL APPROVAL: Request ${id} approved with ${finalSteps.length} steps by admin ${req.userId}`);
     
     res.json({ 
       success: true, 
-      code, 
-      expiresAt, 
-      stepOrder,
-      stepPercentage: request.rows[0].step_percentage,
-      stepCondition: request.rows[0].step_condition,
-      clientType,
-      message: `Code ${clientType} généré et envoyé au client`
+      message: 'Demande approuvée avec succès',
+      steps: finalSteps,
+      targetPercentage: finalTargetPercentage
     });
   } catch (e) {
     await cli.query('ROLLBACK');
-    console.error('Erreur lors de la génération du code de retrait:', e);
-    res.status(500).json({ error: 'Erreur lors de la génération du code de retrait' });
+    console.error('Erreur lors de l\'approbation de la demande de retrait:', e);
+    res.status(500).json({ error: 'Erreur serveur' });
   } finally {
     cli.release();
   }
