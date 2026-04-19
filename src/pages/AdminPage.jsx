@@ -472,87 +472,276 @@ function TabCards({ cards, cardRequests, users, load }) {
   );
 }
 
-// TabTx component
-function TabTx({ transactions, users }) {
+// TabTx component with deposit/withdrawal functionality
+function TabTx({ users, load, transactions }) {
+  const [selectedUser, setSelectedUser] = useState('');
+  const [amount, setAmount] = useState('');
+  const [type, setType] = useState('deposit');
+  const [label, setLabel] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [saving, setSaving] = useState(false);
   const [q, setQ] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  
+  const [showTransactions, setShowTransactions] = useState(false);
+
+  const clients = users.filter((u) => u.role !== 'admin');
+
+  const filteredUsers = clients.filter((u) =>
+    (u.displayName || u.name)?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.email?.toLowerCase().includes(userSearch.toLowerCase())
+  );
+
   const filtered = transactions.filter((t) => {
     const matchesSearch = !q || `${t.type} ${t.label}`.toLowerCase().includes(q.toLowerCase());
     const matchesType = typeFilter === 'all' || t.type === typeFilter;
     return matchesSearch && matchesType;
   });
 
+  const selected = clients.find((u) => u.id === selectedUser);
   const getUser = (userId) => users.find((u) => u.id === userId);
 
+  const handleSubmit = async () => {
+    if (!selectedUser) return toast.error('Sélectionnez un client');
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) return toast.error('Montant invalide');
+    if (type === 'deposit' && !bankName?.trim()) return toast.error('Nom de la banque requis');
+
+    setSaving(true);
+    try {
+      const endpoint = type === 'deposit'
+        ? `/admin/users/${selectedUser}/deposit`
+        : `/admin/users/${selectedUser}/withdraw`;
+      const payload = type === 'deposit' 
+        ? { amount: amt, bankName: bankName.trim(), label: label.trim() || undefined }
+        : { amount: amt, label: label.trim() || undefined };
+      await api.post(endpoint, payload);
+      toast.success(type === 'deposit' ? `+${amt} EUR crédité` : `-${amt} EUR débité`);
+      setAmount('');
+      setLabel('');
+      setBankName('');
+      setSelectedUser('');
+      setUserSearch('');
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erreur');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="space-y-4">
-      <h1 className="text-[18px] font-semibold">Transactions</h1>
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Rechercher une transaction..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm w-full focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
-        </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-[18px] font-semibold">Dépôts / Retraits</h1>
+        <button
+          onClick={() => setShowTransactions(!showTransactions)}
+          className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 transition"
         >
-          <option value="all">Tous les types</option>
-          <option value="deposit">Dépôts</option>
-          <option value="withdrawal">Retraits</option>
-          <option value="transfer">Virements</option>
-        </select>
+          {showTransactions ? 'Masquer' : 'Voir'} les transactions
+        </button>
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left p-3 font-medium text-slate-700">Date</th>
-                <th className="text-left p-3 font-medium text-slate-700">Client</th>
-                <th className="text-left p-3 font-medium text-slate-700">Type</th>
-                <th className="text-left p-3 font-medium text-slate-700">Description</th>
-                <th className="text-right p-3 font-medium text-slate-700">Montant</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((t) => {
-                const user = getUser(t.user_id);
-                return (
-                  <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="p-3 text-slate-600">
-                      {new Date(t.created_at).toLocaleDateString('fr-FR')}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <Avatar name={user?.displayName || user?.email} />
-                        <span>{user?.displayName || user?.email}</span>
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <Chip color={t.type === 'deposit' ? 'green' : t.type === 'withdrawal' ? 'red' : 'blue'}>
-                        {t.type === 'deposit' ? 'Dépôt' : t.type === 'withdrawal' ? 'Retrait' : 'Virement'}
-                      </Chip>
-                    </td>
-                    <td className="p-3 text-slate-700">{t.label}</td>
-                    <td className={`p-3 font-mono font-medium ${t.type === 'deposit' ? 'text-green-600' : 'text-red-600'}`}>
-                      {t.type === 'deposit' ? '+' : '-'}{fmt(t.amount)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {/* Deposit/Withdrawal Form */}
+      <div className="bg-white border border-slate-100 rounded-2xl p-5 space-y-4">
+
+        {/* Recherche client */}
+        <div>
+          <label className="text-[11px] text-slate-500 font-medium">Client</label>
+          <input
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[12px] mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            value={userSearch}
+            onChange={(e) => { setUserSearch(e.target.value); setSelectedUser(''); }}
+            placeholder="Rechercher par nom ou email..."
+          />
+          {userSearch && !selected && (
+            <div className="mt-1 border border-slate-100 rounded-xl overflow-hidden max-h-44 overflow-y-auto">
+              {filteredUsers.length === 0 ? (
+                <p className="text-[11px] text-slate-400 text-center py-3">Aucun client trouvé</p>
+              ) : filteredUsers.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => { setSelectedUser(u.id); setUserSearch(u.displayName || u.name); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-teal-50 transition text-left"
+                >
+                  <div className="w-7 h-7 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                    {(u.displayName || u.name)?.slice(0, 2).toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-medium text-slate-800 truncate">{u.displayName || u.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(u.balance || 0)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {selected && (
+            <div className="mt-2 flex items-center gap-2 bg-teal-50 border border-teal-100 px-3 py-2 rounded-xl">
+              <div className="w-8 h-8 rounded-full bg-teal-200 text-teal-800 flex items-center justify-center text-[11px] font-bold flex-shrink-0">
+                {(selected.displayName || selected.name)?.slice(0, 2).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold text-slate-800">{selected.displayName || selected.name}</p>
+                <p className="text-[10px] text-slate-500">{selected.email} · Solde : {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(selected.balance || 0)}</p>
+              </div>
+              <button type="button" onClick={() => { setSelectedUser(''); setUserSearch(''); }} className="text-slate-300 hover:text-red-400 transition">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Type */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setType('deposit')}
+            className={`py-3 rounded-xl border-2 text-[12px] font-medium transition flex items-center justify-center gap-2 ${
+              type === 'deposit' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+            }`}
+          >
+            <Plus className="w-4 h-4" /> Dépôt
+          </button>
+          <button
+            type="button"
+            onClick={() => setType('withdraw')}
+            className={`py-3 rounded-xl border-2 text-[12px] font-medium transition flex items-center justify-center gap-2 ${
+              type === 'withdraw' ? 'border-red-400 bg-red-50 text-red-600' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+            }`}
+          >
+            <Minus className="w-4 h-4" /> Retrait
+          </button>
+        </div>
+
+        {/* Montant */}
+        <div>
+          <label className="text-[11px] text-slate-500 font-medium">Montant (EUR)</label>
+          <div className="relative mt-1">
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-xl text-[12px] focus:outline-none focus:ring-2 focus:ring-teal-500"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 font-medium">EUR</span>
+          </div>
+        </div>
+
+        {/* Nom de la banque (uniquement pour les dépôts) */}
+        {type === 'deposit' && (
+          <div>
+            <label className="text-[11px] text-slate-500 font-medium">Nom de la banque *</label>
+            <input
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[12px] mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              value={bankName}
+              onChange={(e) => setBankName(e.target.value)}
+              placeholder="Ex: BNP Paribas, Société Générale..."
+            />
+          </div>
+        )}
+
+        {/* Libellé optionnel */}
+        <div>
+          <label className="text-[11px] text-slate-500 font-medium">Libellé <span className="text-slate-300">(optionnel)</span></label>
+          <input
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-[12px] mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Ex: Crédit de bienvenue"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={saving || !selectedUser || !amount || (type === 'deposit' && !bankName?.trim())}
+          className={`w-full rounded-xl py-2.5 text-[12px] font-medium transition disabled:opacity-40 ${
+            type === 'deposit'
+              ? 'bg-teal-700 hover:bg-teal-800 text-white'
+              : 'bg-red-500 hover:bg-red-600 text-white'
+          }`}
+        >
+          {saving ? 'Traitement...' : type === 'deposit' ? `Créditer ${amount ? amount + ' EUR' : ''}` : `Débiter ${amount ? amount + ' EUR' : ''}`}
+        </button>
       </div>
+
+      {/* Transactions List */}
+      {showTransactions && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Rechercher une transaction..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm w-full focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              <option value="all">Tous les types</option>
+              <option value="deposit">Dépôts</option>
+              <option value="withdrawal">Retraits</option>
+              <option value="transfer">Virements</option>
+            </select>
+          </div>
+
+          <div className="bg-white border border-slate-100 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left p-3 font-medium text-slate-700">Date</th>
+                    <th className="text-left p-3 font-medium text-slate-700">Client</th>
+                    <th className="text-left p-3 font-medium text-slate-700">Type</th>
+                    <th className="text-left p-3 font-medium text-slate-700">Description</th>
+                    <th className="text-right p-3 font-medium text-slate-700">Montant</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((t) => {
+                    const user = getUser(t.user_id);
+                    return (
+                      <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="p-3 text-slate-600">
+                          {new Date(t.created_at).toLocaleDateString('fr-FR')}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <Avatar name={user?.displayName || user?.email} />
+                            <span>{user?.displayName || user?.email}</span>
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <Chip color={t.type === 'deposit' ? 'green' : t.type === 'withdrawal' ? 'red' : 'blue'}>
+                            {t.type === 'deposit' ? 'Dépôt' : t.type === 'withdrawal' ? 'Retrait' : 'Virement'}
+                          </Chip>
+                        </td>
+                        <td className="p-3 text-slate-700">{t.label}</td>
+                        <td className={`p-3 font-mono font-medium ${t.type === 'deposit' ? 'text-green-600' : 'text-red-600'}`}>
+                          {t.type === 'deposit' ? '+' : '-'}{fmt(t.amount)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
