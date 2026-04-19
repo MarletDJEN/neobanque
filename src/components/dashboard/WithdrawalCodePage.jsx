@@ -60,7 +60,7 @@ export default function WithdrawalCodePage({ account, onSuccess }) {
     }
     setActionLoading(true);
     try {
-      const res = await api.post('/withdrawal-code/validate', {
+      const res = await api.post('/client/withdrawal-code/validate', {
         code: codeForm.code.trim(),
         requestId: codeForm.requestId
       });
