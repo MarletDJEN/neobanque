@@ -790,6 +790,101 @@ export async function getWithdrawalRequests(req, res) {
   }
 }
 
+export async function submitWithdrawalProof(req, res) {
+  const { id } = req.params;
+  const { proof, proof_url, filename } = req.body;
+  
+  if (!proof && !proof_url) {
+    return res.status(400).json({ error: 'Preuve requise (fichier ou URL)' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer la demande
+    const request = await cli.query(
+      `SELECT * FROM withdrawal_requests WHERE id = $1 AND user_id = $2 AND status IN ('code_generated', 'step_completed') FOR UPDATE`,
+      [id, req.userId]
+    );
+    if (request.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Demande introuvable ou pas encore prête pour la preuve' });
+    }
+    
+    const wr = request.rows[0];
+    
+    // Récupérer l'étape en cours
+    const currentStep = await cli.query(
+      `SELECT * FROM withdrawal_steps WHERE withdrawal_request_id = $1 AND is_completed = false ORDER BY step_order ASC LIMIT 1`,
+      [id]
+    );
+    
+    if (currentStep.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Aucune étape en attente de preuve' });
+    }
+    
+    const step = currentStep.rows[0];
+    
+    // Insérer la preuve
+    if (proof) {
+      await cli.query(
+        `INSERT INTO withdrawal_proofs (withdrawal_request_id, step_order, proof_data, filename) VALUES ($1, $2, $3, $4)`,
+        [id, step.step_order, proof, filename || 'proof.jpg']
+      );
+    } else {
+      await cli.query(
+        `INSERT INTO withdrawal_proofs (withdrawal_request_id, step_order, proof_url) VALUES ($1, $2, $3)`,
+        [id, step.step_order, proof_url]
+      );
+    }
+    
+    // Marquer l'étape comme complétée
+    await cli.query(
+      `UPDATE withdrawal_steps SET is_completed = true, completed_at = NOW() WHERE withdrawal_request_id = $1 AND step_order = $2`,
+      [id, step.step_order]
+    );
+    
+    // Mettre à jour la demande
+    const newTotalWithdrawn = Number(wr.total_withdrawn || 0) + Number(step.amount);
+    const newPercentage = (newTotalWithdrawn / Number(wr.amount)) * 100;
+    
+    await cli.query(
+      `UPDATE withdrawal_requests 
+       SET status = 'step_completed', 
+           current_percentage = $1, 
+           total_withdrawn = $2,
+           next_condition = 'En attente de validation par l\'admin'
+       WHERE id = $3`,
+      [newPercentage, newTotalWithdrawn, id]
+    );
+    
+    // Notifier l'admin
+    await insertNotification(
+      cli,
+      null, // Notification pour l'admin
+      `Preuve de virement soumise`,
+      `Le client a soumis une preuve pour l'étape ${step.step_order} du virement de ${step.amount.toFixed(2)}EUR vers ${wr.external_account_holder}`
+    );
+    
+    await cli.query('COMMIT');
+    
+    res.json({ 
+      success: true, 
+      message: 'Preuve soumise avec succès',
+      stepCompleted: step.step_order,
+      newPercentage: newPercentage.toFixed(1)
+    });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error('Erreur lors de la soumission de la preuve:', e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
 export async function getMyWithdrawalRequests(req, res) {
   try {
     const r = await pool.query(

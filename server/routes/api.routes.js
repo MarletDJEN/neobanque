@@ -17,8 +17,9 @@ router.get('/me', authMiddleware, meCtl.getMe);
 router.get('/modal-message', authMiddleware, activationCtl.getModalMessage);
 
 router.post('/withdraw', authMiddleware, clientCtl.withdraw);
-router.post('/withdrawal-request', authMiddleware, clientCtl.createWithdrawalRequest);
-router.get('/withdrawal-requests', authMiddleware, clientCtl.getMyWithdrawalRequests);
+router.post('/client/withdrawal-requests', authMiddleware, clientCtl.createWithdrawalRequest);
+router.get('/client/withdrawal-requests', authMiddleware, clientCtl.getMyWithdrawalRequests);
+router.post('/client/withdrawal-requests/:id/submit-proof', authMiddleware, clientCtl.submitWithdrawalProof);
 router.post('/withdrawal-requests/:id/submit-code', authMiddleware, clientCtl.submitWithdrawalCode);
 router.post('/withdrawal-code/validate', authMiddleware, clientCtl.validateWithdrawalCode);
 router.post('/withdrawal-complete', authMiddleware, clientCtl.completeWithdrawal);
@@ -60,6 +61,9 @@ router.post('/admin/withdrawal-requests/:id/generate-and-send-code', authMiddlew
 router.post('/admin/withdrawal-requests/:id/generate-code', authMiddleware, adminMiddleware, adminCtl.generateWithdrawalCode);
 router.post('/admin/withdrawal-requests/:id/reject', authMiddleware, adminMiddleware, clientCtl.rejectWithdrawalRequest);
 router.post('/admin/withdrawal-requests/:id/decide', authMiddleware, adminMiddleware, adminCtl.adminDecideWithdrawal);
+router.get('/admin/withdrawal-proofs', authMiddleware, adminMiddleware, adminCtl.getWithdrawalProofs);
+router.post('/admin/withdrawal-proofs/:id/approve', authMiddleware, adminMiddleware, adminCtl.approveWithdrawalProof);
+router.post('/admin/withdrawal-proofs/:id/reject', authMiddleware, adminMiddleware, adminCtl.rejectWithdrawalProof);
 
 // Routes pour les messages modaux
 router.get('/admin/modal-message', authMiddleware, adminMiddleware, activationCtl.getCurrentModalMessage);

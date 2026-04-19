@@ -804,6 +804,142 @@ export async function generateWithdrawalCode(req, res) {
  * L'admin décide de continuer vers une nouvelle étape ou d'accepter totalement le virement.
  * decision: 'continue' | 'complete'
  */
+export async function getWithdrawalProofs(req, res) {
+  try {
+    const proofs = await pool.query(
+      `SELECT wp.*, wr.amount as total_amount, wr.external_iban, wr.external_bic, wr.external_account_holder,
+              u.name as client_name, u.email as client_email, ws.amount as step_amount
+       FROM withdrawal_proofs wp
+       JOIN withdrawal_requests wr ON wp.withdrawal_request_id = wr.id
+       JOIN users u ON wr.user_id = u.id
+       LEFT JOIN withdrawal_steps ws ON wp.withdrawal_request_id = ws.withdrawal_request_id AND wp.step_order = ws.step_order
+       ORDER BY wp.created_at DESC`
+    );
+    res.json({ proofs: proofs.rows });
+  } catch (e) {
+    console.error('Erreur lors du chargement des preuves:', e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+export async function approveWithdrawalProof(req, res) {
+  const { id } = req.params;
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer la preuve
+    const proof = await cli.query(
+      `SELECT wp.*, wr.user_id, wr.amount as step_amount, wr.total_withdrawn
+       FROM withdrawal_proofs wp
+       JOIN withdrawal_requests wr ON wp.withdrawal_request_id = wr.id
+       WHERE wp.id = $1 AND wp.status = 'pending' FOR UPDATE`,
+      [id]
+    );
+    
+    if (proof.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Preuve introuvable ou déjà traitée' });
+    }
+    
+    const proofData = proof.rows[0];
+    
+    // Marquer la preuve comme approuvée
+    await cli.query(
+      `UPDATE withdrawal_proofs SET status = 'approved', reviewed_at = NOW() WHERE id = $1`,
+      [id]
+    );
+    
+    // Marquer l'étape comme complétée
+    await cli.query(
+      `UPDATE withdrawal_steps SET is_completed = true, completed_at = NOW() 
+       WHERE withdrawal_request_id = $1 AND step_order = $2`,
+      [proofData.withdrawal_request_id, proofData.step_order]
+    );
+    
+    // Mettre à jour la demande
+    const newTotalWithdrawn = Number(proofData.total_withdrawn || 0) + Number(proofData.step_amount);
+    const newPercentage = (newTotalWithdrawn / Number(proofData.total_amount)) * 100;
+    
+    await cli.query(
+      `UPDATE withdrawal_requests 
+       SET current_percentage = $1, total_withdrawn = $2, status = 'step_completed'
+       WHERE id = $3`,
+      [newPercentage, newTotalWithdrawn, proofData.withdrawal_request_id]
+    );
+    
+    // Notifier le client
+    await insertNotification(
+      cli,
+      proofData.user_id,
+      'Étape validée',
+      `Votre preuve de virement a été approuvée. Étape ${proofData.step_order} validée (${newPercentage.toFixed(1)}% complété).`
+    );
+    
+    await cli.query('COMMIT');
+    res.json({ success: true, message: 'Preuve approuvée avec succès' });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error('Erreur lors de l\'approbation de la preuve:', e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
+export async function rejectWithdrawalProof(req, res) {
+  const { id } = req.params;
+  const { reason } = req.body;
+  
+  if (!reason?.trim()) {
+    return res.status(400).json({ error: 'Motif de rejet requis' });
+  }
+  
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    
+    // Récupérer la preuve
+    const proof = await cli.query(
+      `SELECT wp.*, wr.user_id
+       FROM withdrawal_proofs wp
+       JOIN withdrawal_requests wr ON wp.withdrawal_request_id = wr.id
+       WHERE wp.id = $1 AND wp.status = 'pending' FOR UPDATE`,
+      [id]
+    );
+    
+    if (proof.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(404).json({ error: 'Preuve introuvable ou déjà traitée' });
+    }
+    
+    const proofData = proof.rows[0];
+    
+    // Marquer la preuve comme rejetée
+    await cli.query(
+      `UPDATE withdrawal_proofs SET status = 'rejected', admin_notes = $2, reviewed_at = NOW() WHERE id = $1`,
+      [id, reason.trim()]
+    );
+    
+    // Notifier le client
+    await insertNotification(
+      cli,
+      proofData.user_id,
+      'Preuve de virement rejetée',
+      `Votre preuve a été rejetée. Motif: ${reason.trim()}`
+    );
+    
+    await cli.query('COMMIT');
+    res.json({ success: true, message: 'Preuve rejetée avec succès' });
+  } catch (e) {
+    await cli.query('ROLLBACK');
+    console.error('Erreur lors du rejet de la preuve:', e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    cli.release();
+  }
+}
+
 export async function adminDecideWithdrawal(req, res) {
   const { id } = req.params;
   const { decision, nextStepPercentage, nextStepCondition, clientType } = req.body;

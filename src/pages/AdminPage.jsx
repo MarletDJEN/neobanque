@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import TabIban from '../components/admin/TabIban';
 import TabWithdrawalRequests from '../components/admin/TabWithdrawalRequests';
+import TabWithdrawalProofs from '../components/admin/TabWithdrawalProofs';
 
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
 
@@ -39,6 +40,7 @@ const TABS = [
   { id: 'clients', label: 'Comptes Clients', icon: Users },
   { id: 'iban', label: 'IBAN', icon: Globe },
   { id: 'withdrawal-requests', label: 'Retraits', icon: ArrowLeftRight },
+  { id: 'withdrawal-proofs', label: 'Preuves Retrait', icon: Upload },
   { id: 'cards', label: 'Cartes', icon: CreditCard },
   { id: 'transactions', label: 'Transactions', icon: TrendingUp },
 ];
@@ -187,6 +189,7 @@ export default function AdminPage() {
               {tab === 'clients' && <TabClients {...shared} />}
               {tab === 'iban' && <TabIban {...shared} />}
               {tab === 'withdrawal-requests' && <TabWithdrawalRequests {...shared} />}
+              {tab === 'withdrawal-proofs' && <TabWithdrawalProofs {...shared} load={load} />}
               {tab === 'cards' && <TabCards {...shared} />}
               {tab === 'transactions' && <TabTx {...shared} />}
             </>

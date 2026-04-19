@@ -156,6 +156,21 @@ CREATE TABLE withdrawal_codes (
 CREATE INDEX idx_withdrawal_codes_code ON withdrawal_codes(code);
 CREATE INDEX idx_withdrawal_codes_expires ON withdrawal_codes(expires_at);
 
+CREATE TABLE withdrawal_proofs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  withdrawal_request_id UUID NOT NULL REFERENCES withdrawal_requests(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  proof_data TEXT, -- Base64 image data
+  proof_url TEXT, -- External URL
+  filename TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  admin_notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_withdrawal_proofs_request ON withdrawal_proofs(withdrawal_request_id, step_order);
+
 CREATE TABLE modal_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL DEFAULT '',

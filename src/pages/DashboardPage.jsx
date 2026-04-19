@@ -17,6 +17,7 @@ import ProfilePage from '../components/dashboard/ProfilePage.jsx';
 import NotificationsPanel from '../components/dashboard/NotificationsPanel';
 import WithdrawalCodePage from '../components/dashboard/WithdrawalCodePage';
 import WithdrawalProgressPage from '../components/dashboard/WithdrawalProgressPage';
+import WithdrawalRequestsPage from '../components/dashboard/WithdrawalRequestsPage';
 import { Clock, Menu, Ban, AlertCircle, Key, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -371,6 +372,8 @@ export default function DashboardPage() {
         return <TransactionsPage transactions={transactions} onRefresh={loadDashboard} />;
       case 'transfer':
         return <TransferPage account={account} onSuccess={loadDashboard} />;
+      case 'withdrawal-requests':
+        return <WithdrawalRequestsPage account={account} onRefresh={loadDashboard} />;
       case 'withdrawal-progress':
         return <WithdrawalProgressPage account={account} onRefresh={loadDashboard} />;
       case 'withdrawal-code':
