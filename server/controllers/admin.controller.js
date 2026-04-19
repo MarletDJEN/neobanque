@@ -674,8 +674,7 @@ export async function approveWithdrawalRequest(req, res) {
            target_percentage = $1,
            current_percentage = 0,
            total_withdrawn = 0,
-           next_condition = $2,
-           reviewed_at = NOW()
+           next_condition = $2
        WHERE id = $3`,
       [finalTargetPercentage, finalSteps[0]?.condition || 'Première étape', id]
     );
