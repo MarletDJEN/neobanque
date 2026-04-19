@@ -164,7 +164,7 @@ export default function TabWithdrawalRequests() {
       case 'pending': return <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 text-[10.5px] font-medium rounded-full"><Clock className="w-3 h-3" /> En attente</span>;
       case 'code_generated': return <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-[10.5px] font-medium rounded-full"><Key className="w-3 h-3" /> Code généré</span>;
       case 'step_completed': return <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-[10.5px] font-medium rounded-full"><ArrowRight className="w-3 h-3" /> Étape complétée — décision requise</span>;
-      case 'approved':
+      case 'approved': return <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-[10.5px] font-medium rounded-full"><ArrowRight className="w-3 h-3" /> Approuvé — générer un code</span>;
       case 'completed': return <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-[10.5px] font-medium rounded-full"><CheckCircle className="w-3 h-3" /> Complété</span>;
       case 'rejected': return <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-[10.5px] font-medium rounded-full"><XCircle className="w-3 h-3" /> Rejeté</span>;
       default: return null;
@@ -275,6 +275,36 @@ export default function TabWithdrawalRequests() {
                     {actionLoading === req.id ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <XCircle className="w-4 h-4" />}
                     Rejeter
                   </button>
+                </div>
+              )}
+
+              {/* APPROVED : générer le premier code */}
+              {req.status === 'approved' && (
+                <div className="space-y-2 pt-2">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm font-semibold text-blue-900 flex items-center gap-2">
+                      <ArrowRight className="w-4 h-4" /> Demande approuvée — Générer le premier code
+                    </p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      La demande a été approuvée. Générer le premier code pour que le client puisse commencer le virement.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { type: 'standard', label: 'Standard', color: 'bg-gray-600 hover:bg-gray-700' },
+                      { type: 'premium', label: 'Premium', color: 'bg-purple-600 hover:bg-purple-700' },
+                      { type: 'vip', label: 'VIP', color: 'bg-amber-600 hover:bg-amber-700' },
+                      { type: 'business', label: 'Business', color: 'bg-green-600 hover:bg-green-700' },
+                    ].map(({ type, label, color }) => (
+                      <button key={type}
+                        onClick={() => handleGenerateAndSendCode(req, 1, type)}
+                        disabled={actionLoading === req.id}
+                        className={`py-2 ${color} disabled:opacity-50 text-white font-medium text-xs rounded-lg transition flex items-center justify-center gap-1`}>
+                        {actionLoading === req.id ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Key className="w-3 h-3" />}
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
